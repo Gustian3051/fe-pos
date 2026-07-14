@@ -1,9 +1,9 @@
-import { Barcode, Boxes, Layers3, Plus, Ruler, Trash2 } from "lucide-react";
+import { Barcode, Boxes, Calculator, Layers3, Plus, Ruler, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { api, json } from "../lib/api";
 import { asArray, displayLabel, quantity, rupiah } from "../lib/format";
-import type { Product, ProductUnit } from "../types/api";
+import type { Product, ProductRecipe, ProductUnit } from "../types/api";
 import {
   Badge,
   Button,
@@ -26,15 +26,17 @@ export function CatalogPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
+  const [store, setStore] = useState<any>({ business_type: "grocery" });
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [modal, setModal] = useState<
-    "product" | "category" | "unit" | "productUnit" | null
+    "product" | "category" | "unit" | "productUnit" | "recipe" | null
   >(null);
   const [selected, setSelected] = useState<Product | null>(null);
   const [detail, setDetail] = useState<{
     product: Product;
     units: ProductUnit[];
+    recipe?: ProductRecipe | null;
   } | null>(null);
   const [saving, setSaving] = useState(false);
   const [product, setProduct] = useState({
@@ -46,6 +48,18 @@ export function CatalogPage() {
     base_unit_id: "",
     minimum_stock: 0,
     track_batch: false,
+    product_kind: "stock",
+    metadata: {
+      registration_number: "",
+      dosage: "",
+      requires_prescription: false,
+      specification: "",
+      dimensions: "",
+    },
+  });
+  const [recipe, setRecipe] = useState({
+    yield_quantity: 1,
+    items: [{ ingredient_product_id: "", quantity: 1 }],
   });
   const [simple, setSimple] = useState({
     code: "",
@@ -63,14 +77,28 @@ export function CatalogPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [p, c, u] = await Promise.all([
+      const [p, c, u, s] = await Promise.all([
         api<Product[]>(`/products?q=${encodeURIComponent(query)}&limit=100`),
         api<any[]>("/categories"),
         api<any[]>("/units"),
+        api<any>("/admin/store"),
       ]);
       setProducts(asArray(p));
       setCategories(asArray(c));
       setUnits(asArray(u));
+      setStore(s);
+      setProduct((current) => {
+        const allowed = s.business_type === "cafe_restaurant"
+          ? ["menu", "ingredient", "service"]
+          : s.business_type === "pharmacy"
+            ? ["medicine", "stock"]
+            : s.business_type === "building_materials"
+              ? ["material", "stock"]
+              : ["stock", "ingredient"];
+        return allowed.includes(current.product_kind)
+          ? current
+          : { ...current, product_kind: allowed[0] };
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memuat katalog");
     }
@@ -91,6 +119,8 @@ export function CatalogPage() {
           base_unit_id: product.base_unit_id,
           minimum_stock_milli: product.minimum_stock * 1000,
           primary_supplier_id: null,
+          product_kind: product.product_kind,
+          metadata: product.metadata,
         }),
       );
       show("Produk berhasil ditambahkan.");
@@ -105,6 +135,48 @@ export function CatalogPage() {
       setSaving(false);
     }
   };
+  const openRecipe = () => {
+    if (!detail) return;
+    setSelected(detail.product);
+    setRecipe(detail.recipe ? {
+      yield_quantity: detail.recipe.yield_quantity_milli / 1000,
+      items: detail.recipe.items.map((item) => ({
+        ingredient_product_id: item.ingredient_product_id,
+        quantity: item.quantity_milli / 1000,
+      })),
+    } : { yield_quantity: 1, items: [{ ingredient_product_id: "", quantity: 1 }] });
+    setDetail(null);
+    setModal("recipe");
+  };
+  const saveRecipe = async () => {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await api(`/products/${selected.id}/recipe`, json("PUT", {
+        yield_quantity_milli: Math.round(recipe.yield_quantity * 1000),
+        items: recipe.items.map((item) => ({
+          ingredient_product_id: item.ingredient_product_id,
+          quantity_milli: Math.round(item.quantity * 1000),
+        })),
+      }));
+      show("Resep disimpan dan HPP menu dihitung ulang.");
+      setModal(null);
+      await load();
+      await openDetail(selected);
+    } catch (reason) {
+      show(reason instanceof Error ? reason.message : "Gagal menyimpan resep", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const productKinds = store.business_type === "cafe_restaurant"
+    ? [["menu", "Menu jadi"], ["ingredient", "Bahan baku"], ["service", "Layanan"]]
+    : store.business_type === "pharmacy"
+      ? [["medicine", "Obat"], ["stock", "Produk kesehatan"]]
+      : store.business_type === "building_materials"
+        ? [["material", "Material bangunan"], ["stock", "Produk stok"]]
+        : [["stock", "Produk stok"], ["ingredient", "Bahan curah"]];
   const createSimple = async () => {
     setSaving(true);
     try {
@@ -182,7 +254,7 @@ export function CatalogPage() {
       {node}
       <PageHeader
         title="Katalog produk"
-        description="Kelola produk sembako, kategori, satuan, konversi, dan harga."
+        description="Kelola produk lintas usaha, satuan, harga, resep, dan HPP otomatis."
         action={can("product.manage") ?
           <Button
             onClick={() =>
@@ -243,6 +315,8 @@ export function CatalogPage() {
                   <tr>
                     <th>Produk</th>
                     <th>SKU / Barcode</th>
+                    <th>Jenis</th>
+                    <th>HPP otomatis</th>
                     <th>Stok minimum</th>
                     <th>Status</th>
                     <th></th>
@@ -258,6 +332,11 @@ export function CatalogPage() {
                       <td>
                         {item.sku}
                         <small>{item.barcode || "—"}</small>
+                      </td>
+                      <td><Badge tone="info">{displayLabel(item.product_kind)}</Badge></td>
+                      <td>
+                        <strong>{rupiah(item.hpp_per_base_milli || 0)}</strong>
+                        <small>{item.hpp_method === "recipe" ? "Komposisi resep" : "Rata-rata tertimbang"}</small>
                       </td>
                       <td>{quantity(item.minimum_stock_milli)}</td>
                       <td>
@@ -349,6 +428,15 @@ export function CatalogPage() {
             ))}
           </Select>
           <Select
+            label="Jenis produk"
+            value={product.product_kind}
+            onChange={(e) => setProduct({ ...product, product_kind: e.target.value })}
+          >
+            {productKinds.map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </Select>
+          <Select
             label="Satuan dasar"
             value={product.base_unit_id}
             onChange={(e) =>
@@ -371,6 +459,42 @@ export function CatalogPage() {
               setProduct({ ...product, minimum_stock: Number(e.target.value) })
             }
           />
+          {store.business_type === "pharmacy" && product.product_kind === "medicine" && (
+            <>
+              <Input
+                label="Nomor izin edar"
+                value={product.metadata.registration_number}
+                onChange={(e) => setProduct({ ...product, metadata: { ...product.metadata, registration_number: e.target.value } })}
+              />
+              <Input
+                label="Dosis / kekuatan"
+                value={product.metadata.dosage}
+                onChange={(e) => setProduct({ ...product, metadata: { ...product.metadata, dosage: e.target.value } })}
+              />
+              <label className="check-field">
+                <input
+                  type="checkbox"
+                  checked={Boolean(product.metadata.requires_prescription)}
+                  onChange={(e) => setProduct({ ...product, metadata: { ...product.metadata, requires_prescription: e.target.checked } })}
+                />
+                <span>Memerlukan resep dokter</span>
+              </label>
+            </>
+          )}
+          {store.business_type === "building_materials" && product.product_kind === "material" && (
+            <>
+              <Input
+                label="Spesifikasi material"
+                value={product.metadata.specification}
+                onChange={(e) => setProduct({ ...product, metadata: { ...product.metadata, specification: e.target.value } })}
+              />
+              <Input
+                label="Ukuran / dimensi"
+                value={product.metadata.dimensions}
+                onChange={(e) => setProduct({ ...product, metadata: { ...product.metadata, dimensions: e.target.value } })}
+              />
+            </>
+          )}
           <label className="check-field">
             <input
               type="checkbox"
@@ -528,6 +652,13 @@ export function CatalogPage() {
           </div>
         </div>
         <h3>Satuan & harga</h3>
+        <div className="salary-total">
+          <span>
+            HPP otomatis
+            <small>{detail?.product.hpp_method === "recipe" ? "Berdasarkan resep" : "Rata-rata tertimbang penerimaan pembelian"}</small>
+          </span>
+          <strong>{rupiah(detail?.product.hpp_per_base_milli || 0)}</strong>
+        </div>
         {detail?.units.map((item) => (
           <div className="unit-price-row" key={item.id}>
             <div>
@@ -548,6 +679,11 @@ export function CatalogPage() {
                 <Trash2 /> Hapus produk
               </Button>
             )}
+            {detail?.product.product_kind === "menu" && (
+              <Button variant="secondary" onClick={openRecipe}>
+                <Calculator /> Atur resep & HPP
+              </Button>
+            )}
             <Button
               onClick={() => {
                 setSelected(detail!.product);
@@ -563,6 +699,63 @@ export function CatalogPage() {
             </Button>
           </div>
         )}
+      </Modal>
+      <Modal
+        open={modal === "recipe"}
+        title={`Resep & HPP ${selected?.name || "menu"}`}
+        onClose={() => setModal(null)}
+        wide
+      >
+        <Input
+          label="Hasil resep"
+          type="number"
+          min="0.001"
+          step="0.001"
+          value={recipe.yield_quantity}
+          onChange={(e) => setRecipe({ ...recipe, yield_quantity: Number(e.target.value) })}
+          hint="Jumlah porsi atau satuan dasar yang dihasilkan oleh satu resep."
+        />
+        <h3>Komposisi bahan</h3>
+        {recipe.items.map((item, index) => (
+          <div className="form-grid" key={index}>
+            <Select
+              label={`Bahan ${index + 1}`}
+              value={item.ingredient_product_id}
+              onChange={(e) => setRecipe({ ...recipe, items: recipe.items.map((value, itemIndex) => itemIndex === index ? { ...value, ingredient_product_id: e.target.value } : value) })}
+            >
+              <option value="">Pilih bahan</option>
+              {products.filter((value) => value.id !== selected?.id && value.product_kind !== "menu" && value.product_kind !== "service").map((value) => (
+                <option key={value.id} value={value.id}>{value.name} — HPP {rupiah(value.hpp_per_base_milli || 0)}</option>
+              ))}
+            </Select>
+            <Input
+              label="Jumlah bahan"
+              type="number"
+              min="0.001"
+              step="0.001"
+              value={item.quantity}
+              onChange={(e) => setRecipe({ ...recipe, items: recipe.items.map((value, itemIndex) => itemIndex === index ? { ...value, quantity: Number(e.target.value) } : value) })}
+            />
+            {recipe.items.length > 1 && (
+              <Button variant="ghost" onClick={() => setRecipe({ ...recipe, items: recipe.items.filter((_, itemIndex) => itemIndex !== index) })}>
+                <Trash2 /> Hapus bahan
+              </Button>
+            )}
+          </div>
+        ))}
+        <Button variant="secondary" onClick={() => setRecipe({ ...recipe, items: [...recipe.items, { ingredient_product_id: "", quantity: 1 }] })}>
+          <Plus /> Tambah bahan
+        </Button>
+        <div className="modal-actions">
+          <Button variant="secondary" onClick={() => setModal(null)}>Batal</Button>
+          <Button
+            loading={saving}
+            disabled={recipe.yield_quantity <= 0 || recipe.items.some((item) => !item.ingredient_product_id || item.quantity <= 0)}
+            onClick={() => void saveRecipe()}
+          >
+            <Calculator /> Simpan & hitung HPP
+          </Button>
+        </div>
       </Modal>
     </>
   );

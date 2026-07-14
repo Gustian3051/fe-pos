@@ -34,10 +34,31 @@ export interface Product {
   barcode?: string | null;
   name: string;
   brand: string;
+  product_kind: "stock" | "ingredient" | "menu" | "medicine" | "material" | "service";
+  metadata: Record<string, any>;
   minimum_stock_milli: number;
   track_batch: boolean;
+  hpp_per_base_milli: number;
+  hpp_method: "weighted_average" | "recipe";
   status: string;
   version: number;
+}
+
+export interface ProductRecipeItem {
+  id?: string;
+  ingredient_product_id: string;
+  ingredient_name?: string;
+  quantity_milli: number;
+  ingredient_hpp_per_base_milli?: number;
+  cost_total?: number;
+}
+
+export interface ProductRecipe {
+  product_id: string;
+  yield_quantity_milli: number;
+  hpp_per_base_milli: number;
+  version: number;
+  items: ProductRecipeItem[];
 }
 
 export interface ProductUnit {

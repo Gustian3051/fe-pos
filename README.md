@@ -1,8 +1,8 @@
 # WarungKasir Frontend
 
-Frontend POS berbasis React, TypeScript, Vite, dan Tailwind CSS.
+Frontend POS berbasis React, TypeScript, Vite, dan Tailwind CSS untuk toko sembako, kafe/restoran, apotek, dan toko bangunan.
 
-Pemilik toko memiliki akses khusus untuk menghapus produk baru yang belum memiliki riwayat serta mengelola data karyawan dan pembayaran gaji bulanan.
+Pemilik toko memiliki akses khusus untuk menghapus produk/karyawan yang belum memiliki riwayat, menghubungkan akun administrasi dengan karyawan, dan mengelola pembayaran gaji bulanan. Katalog menyesuaikan profil usaha, menampilkan HPP rata-rata tertimbang, serta menyediakan penyusun resep dan HPP menu otomatis.
 
 ## Menjalankan
 

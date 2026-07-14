@@ -28,6 +28,7 @@ const today = () => new Date().toLocaleDateString("en-CA");
 const currentPeriod = () => today().slice(0, 7);
 
 const blankEmployee = () => ({
+  user_id: "",
   employee_code: "",
   full_name: "",
   position: "",
@@ -50,6 +51,7 @@ const blankSalary = (employee?: Employee | null) => ({
 
 export function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
   const [salaries, setSalaries] = useState<SalaryPayment[]>([]);
   const [selected, setSelected] = useState<Employee | null>(null);
   const [employee, setEmployee] = useState(blankEmployee());
@@ -64,7 +66,12 @@ export function EmployeesPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      setEmployees(asArray(await api<Employee[]>("/employees")));
+      const [employeeValues, userValues] = await Promise.all([
+        api<Employee[]>("/employees"),
+        api<any[]>("/admin/users"),
+      ]);
+      setEmployees(asArray(employeeValues));
+      setUsers(asArray(userValues));
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Gagal memuat karyawan",
@@ -85,6 +92,7 @@ export function EmployeesPage() {
   const openEdit = (value: Employee) => {
     setSelected(value);
     setEmployee({
+      user_id: value.user_id || "",
       employee_code: value.employee_code,
       full_name: value.full_name,
       position: value.position,
@@ -97,14 +105,29 @@ export function EmployeesPage() {
     setModal("employee");
   };
 
+  const deleteEmployee = async (value: Employee) => {
+    if (!window.confirm(`Hapus karyawan ${value.full_name}? Karyawan yang sudah memiliki riwayat gaji hanya dapat dinonaktifkan.`)) return;
+    setSaving(true);
+    try {
+      await api(`/employees/${value.id}`, json("DELETE"));
+      show("Karyawan berhasil dihapus.");
+      if (selected?.id === value.id) setModal(null);
+      await load();
+    } catch (reason) {
+      show(reason instanceof Error ? reason.message : "Gagal menghapus karyawan", true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveEmployee = async () => {
     setSaving(true);
     try {
       if (selected) {
-        await api(`/employees/${selected.id}`, json("PUT", employee));
+        await api(`/employees/${selected.id}`, json("PUT", { ...employee, user_id: employee.user_id || null }));
         show("Data karyawan berhasil diperbarui.");
       } else {
-        await api("/employees", json("POST", employee));
+        await api("/employees", json("POST", { ...employee, user_id: employee.user_id || null }));
         show("Karyawan berhasil ditambahkan.");
       }
       setModal(null);
@@ -230,6 +253,9 @@ export function EmployeesPage() {
                         <Button variant="ghost" onClick={() => openEdit(item)}>
                           <Pencil /> Ubah
                         </Button>
+                        <Button variant="ghost" onClick={() => void deleteEmployee(item)}>
+                          <Trash2 /> Hapus
+                        </Button>
                         <Button
                           variant="ghost"
                           onClick={() => void loadSalaries(item, "salary")}
@@ -265,6 +291,18 @@ export function EmployeesPage() {
         wide
       >
         <div className="form-grid">
+          <Select
+            label="Akun aplikasi (opsional)"
+            value={employee.user_id}
+            onChange={(event) => setEmployee({ ...employee, user_id: event.target.value })}
+          >
+            <option value="">Tidak terhubung ke akun</option>
+            {users
+              .filter((item) => !item.employee_id || item.employee_id === selected?.id)
+              .map((item) => (
+                <option key={item.id} value={item.id}>{item.full_name} (@{item.username})</option>
+              ))}
+          </Select>
           <Input
             label="Kode karyawan"
             value={employee.employee_code}
@@ -332,6 +370,11 @@ export function EmployeesPage() {
           )}
         </div>
         <div className="modal-actions">
+          {selected && (
+            <Button variant="danger" loading={saving} onClick={() => void deleteEmployee(selected)}>
+              <Trash2 /> Hapus karyawan
+            </Button>
+          )}
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>

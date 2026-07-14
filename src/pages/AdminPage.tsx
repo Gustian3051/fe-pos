@@ -31,6 +31,7 @@ export function AdminPage() {
   );
   const [users, setUsers] = useState<any[]>([]);
   const [roles, setRoles] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
   const [store, setStore] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
@@ -42,6 +43,7 @@ export function AdminPage() {
     username: "",
     full_name: "",
     password: "",
+    employee_id: "",
   });
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -55,6 +57,7 @@ export function AdminPage() {
         api("/admin/store"),
         api("/sync/devices"),
         api("/admin/audit-logs?limit=100"),
+        api("/employees"),
       ]);
       if (results[0].status === "fulfilled")
         setUsers(asArray(results[0].value));
@@ -65,6 +68,8 @@ export function AdminPage() {
         setDevices(asArray(results[3].value));
       if (results[4].status === "fulfilled")
         setAudit(asArray(results[4].value));
+      if (results[5].status === "fulfilled")
+        setEmployees(asArray(results[5].value));
       const rejected = results.find((item) => item.status === "rejected");
       if (rejected?.status === "rejected")
         setError(
@@ -82,10 +87,10 @@ export function AdminPage() {
   const createUser = async () => {
     setSaving(true);
     try {
-      await api("/admin/users", json("POST", user));
+      await api("/admin/users", json("POST", { ...user, employee_id: user.employee_id || null }));
       show("Pengguna berhasil dibuat.");
       setModal(null);
-      setUser({ role_id: "", username: "", full_name: "", password: "" });
+      setUser({ role_id: "", username: "", full_name: "", password: "", employee_id: "" });
       await load();
     } catch (e) {
       show(e instanceof Error ? e.message : "Gagal membuat pengguna", true);
@@ -185,6 +190,7 @@ export function AdminPage() {
                 <tr>
                   <th>Pengguna</th>
                   <th>Hak akses</th>
+                  <th>Karyawan terhubung</th>
                   <th>Terakhir masuk</th>
                   <th>Status</th>
                   <th></th>
@@ -199,6 +205,11 @@ export function AdminPage() {
                     </td>
                     <td>
                       <Badge tone="info">{displayLabel(item.role)}</Badge>
+                    </td>
+                    <td>
+                      {item.employee_id ? (
+                        <><strong>{item.employee_code}</strong><small>{item.position}</small></>
+                      ) : "—"}
                     </td>
                     <td>{dateTime(item.last_login_at)}</td>
                     <td>
@@ -234,6 +245,16 @@ export function AdminPage() {
           {store ? (
             <div className="store-form">
               <div className="form-grid">
+                <Select
+                  label="Jenis usaha"
+                  value={store.business_type || "grocery"}
+                  onChange={(e) => setStore({ ...store, business_type: e.target.value })}
+                >
+                  <option value="grocery">Toko sembako</option>
+                  <option value="cafe_restaurant">Kafe & restoran</option>
+                  <option value="pharmacy">Apotek</option>
+                  <option value="building_materials">Toko bangunan</option>
+                </Select>
                 <Input
                   label="Nama toko"
                   value={store.name || ""}
@@ -423,6 +444,19 @@ export function AdminPage() {
             <option key={item.id} value={item.id}>
               {item.name}
             </option>
+          ))}
+        </Select>
+        <Select
+          label="Hubungkan dengan karyawan (opsional)"
+          value={user.employee_id}
+          onChange={(e) => {
+            const employee = employees.find((item) => item.id === e.target.value);
+            setUser({ ...user, employee_id: e.target.value, full_name: employee?.full_name || user.full_name });
+          }}
+        >
+          <option value="">Tanpa data karyawan</option>
+          {employees.filter((item) => !item.user_id).map((item) => (
+            <option key={item.id} value={item.id}>{item.employee_code} — {item.full_name}</option>
           ))}
         </Select>
         <Input
