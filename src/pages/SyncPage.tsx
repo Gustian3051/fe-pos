@@ -42,12 +42,34 @@ export function SyncPage() {
   const pullNow = async () => {
     setLoading(true);
     try {
-      const result = await api(
-        `/sync/pull?cursor=${encodeURIComponent(localStorage.getItem("warungkasir.sync_cursor") || new Date(0).toISOString())}`,
-      );
-      setPull(result);
-      localStorage.setItem("warungkasir.sync_cursor", (result as any).cursor);
-      show("Data toko berhasil diperbarui.");
+      let cursor =
+        localStorage.getItem("warungkasir.sync_cursor") ||
+        new Date(0).toISOString();
+      const totals = { products: 0, customers: 0, categories: 0, product_units: 0 };
+      let pages = 0;
+
+      while (pages < 100) {
+        const result: any = await api(
+          `/sync/pull?cursor=${encodeURIComponent(cursor)}&limit=500`,
+        );
+        totals.products += asArray(result.products).length;
+        totals.customers += asArray(result.customers).length;
+        totals.categories += asArray(result.categories).length;
+        totals.product_units += asArray(result.product_units).length;
+        cursor = result.cursor;
+        localStorage.setItem("warungkasir.sync_cursor", cursor);
+        pages += 1;
+        if (!result.has_more) break;
+      }
+
+      if (pages >= 100) {
+        throw new Error(
+          "Data yang diperbarui sangat banyak. Jalankan pembaruan sekali lagi untuk melanjutkan.",
+        );
+      }
+
+      setPull({ ...totals, pages });
+      show("Data produk, pelanggan, dan harga berhasil diperbarui.");
     } catch (e) {
       show(e instanceof Error ? e.message : "Pembaruan data gagal", true);
     } finally {
@@ -59,14 +81,14 @@ export function SyncPage() {
       {node}
       <PageHeader
         title="Pembaruan data"
-        description="Pastikan seluruh komputer kasir memakai data produk, pelanggan, dan harga terbaru."
+        description="Perbarui data produk, pelanggan, satuan, dan harga secara bertahap agar seluruh komputer kasir memakai informasi terbaru."
         action={
           <Button loading={loading} onClick={() => void pullNow()}>
             <CloudDownload /> Perbarui data sekarang
           </Button>
         }
       />
-      <div className="sync-stats">
+      <div className="mb-4 grid grid-cols-1 gap-4 md:grid-cols-3 [&_.card]:flex [&_.card]:items-center [&_.card]:gap-3 [&_.card>svg]:text-brand-700 [&_strong]:text-lg [&_span]:text-[10px] [&_span]:text-slate-500">
         <Card>
           <MonitorSmartphone />
           <div>
@@ -96,14 +118,14 @@ export function SyncPage() {
         </Card>
       </div>
       {pull && (
-        <Card className="sync-result">
+        <Card className="mb-4 flex items-center gap-3 bg-brand-50 [&>svg]:text-brand-700 [&_strong]:text-xs [&_span]:text-[10px] [&_span]:text-slate-500">
           <CheckCircle2 />
           <div>
             <strong>Data toko berhasil diperbarui</strong>
             <span>
-              {asArray(pull.products).length} produk,{" "}
-              {asArray(pull.customers).length} pelanggan, dan{" "}
-              {asArray(pull.categories).length} kategori diperbarui.
+              {pull.products} produk,{" "}
+              {pull.customers} pelanggan, dan{" "}
+              {pull.categories} kategori serta {pull.product_units} harga satuan diperbarui.
             </span>
           </div>
         </Card>
@@ -111,7 +133,7 @@ export function SyncPage() {
       <Card
         title="Komputer kasir"
         action={
-          <button className="icon-action" onClick={() => void load()}>
+          <button className="inline-flex items-center gap-2 border-0 bg-transparent text-xs font-bold text-brand-700 hover:text-brand-900 [&_svg]:h-4 [&_svg]:w-4" onClick={() => void load()}>
             <RefreshCw /> Muat ulang
           </button>
         }
@@ -119,14 +141,14 @@ export function SyncPage() {
         {error ? (
           <ErrorState message={error} retry={() => void load()} />
         ) : (
-          <div className="device-list">
+          <div className="[&_article]:flex [&_article]:items-center [&_article]:gap-3 [&_article]:border-b [&_article]:border-[#dfe7e2] [&_article]:py-3 [&_strong]:text-xs [&_small]:text-[10px] [&_small]:text-slate-500">
             {devices.map((item) => (
               <article key={item.id}>
                 <span
                   className={
                     item.status === "active"
-                      ? "device-online"
-                      : "device-offline"
+                      ? "grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"
+                      : "grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-50 text-red-700"
                   }
                 >
                   {item.status === "active" ? <Wifi /> : <WifiOff />}

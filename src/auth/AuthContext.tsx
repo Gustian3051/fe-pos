@@ -1,3 +1,4 @@
+/* oxlint-disable react/only-export-components */
 import {
   createContext,
   useCallback,
@@ -14,7 +15,8 @@ interface LoginInput {
   password: string;
 }
 
-interface BootstrapInput extends LoginInput {
+interface RegisterInput extends LoginInput {
+  store_name: string;
   full_name: string;
 }
 
@@ -22,7 +24,7 @@ interface AuthValue {
   user: User | null;
   loading: boolean;
   login: (input: LoginInput) => Promise<void>;
-  bootstrap: (input: BootstrapInput) => Promise<void>;
+  register: (input: RegisterInput) => Promise<void>;
   logout: () => Promise<void>;
   can: (permission: string) => boolean;
 }
@@ -79,16 +81,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(session.user);
   };
 
-  const bootstrap = async ({ full_name, ...input }: BootstrapInput) => {
+  const register = async ({ store_name, full_name, ...input }: RegisterInput) => {
     await api(
-      "/auth/bootstrap",
+      "/auth/register",
       json("POST", {
-        username: input.username,
-        full_name,
+        store_name: store_name.trim(),
+        username: input.username.trim(),
+        full_name: full_name.trim(),
         password: input.password,
       }),
     );
-    await login(input);
+    await login({ ...input, username: input.username.trim() });
   };
 
   const logout = async () => {
@@ -115,7 +118,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  const value = { user, loading, login, bootstrap, logout, can };
+  const value = { user, loading, login, register, logout, can };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

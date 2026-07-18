@@ -1,6 +1,7 @@
 import {
   FileClock,
   KeyRound,
+  Pencil,
   Plus,
   Settings,
   ShieldCheck,
@@ -9,8 +10,17 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { api, json } from "../lib/api";
-import { activityLabel, asArray, dateTime, displayLabel } from "../lib/format";
+import { useAuth } from "../auth/AuthContext";
+import { useConfirm } from "../components/feedback";
+import { api, apiPage, json } from "../lib/api";
+import {
+  activityLabel,
+  asArray,
+  dateTime,
+  displayLabel,
+  isUUID,
+} from "../lib/format";
+import { useDebouncedValue } from "../lib/hooks";
 import {
   Badge,
   Button,
@@ -20,18 +30,59 @@ import {
   Input,
   Modal,
   PageHeader,
+  Pagination,
+  SearchInput,
   Select,
+  Tabs,
   Textarea,
   useToast,
 } from "../components/ui";
 
+type AdminRole = {
+  id: string;
+  code: string;
+  name: string;
+  permissions: string[];
+};
+
+type AdminUser = {
+  id: string;
+  role_id: string;
+  role: string;
+  role_name: string;
+  username: string;
+  full_name: string;
+  status: string;
+  version: number;
+  last_login_at?: string | null;
+  employee_id?: string | null;
+  employee_code?: string | null;
+  employee_name?: string | null;
+  employee_position?: string | null;
+  employee_status?: string | null;
+};
+
 export function AdminPage() {
+  const { user: sessionUser } = useAuth();
   const [tab, setTab] = useState<"users" | "store" | "devices" | "audit">(
     "users",
   );
-  const [users, setUsers] = useState<any[]>([]);
-  const [roles, setRoles] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [userQuery, setUserQuery] = useState("");
+  const debouncedUserQuery = useDebouncedValue(userQuery, 300);
+  const [userPage, setUserPage] = useState(1);
+  const [auditPage, setAuditPage] = useState(1);
+  const [userMeta, setUserMeta] = useState({
+    page: 1,
+    limit: 50,
+    has_more: false,
+  });
+  const [auditMeta, setAuditMeta] = useState({
+    page: 1,
+    limit: 50,
+    has_more: false,
+  });
+  const [roles, setRoles] = useState<AdminRole[]>([]);
   const [store, setStore] = useState<any>(null);
   const [devices, setDevices] = useState<any[]>([]);
   const [audit, setAudit] = useState<any[]>([]);
@@ -43,57 +94,119 @@ export function AdminPage() {
     username: "",
     full_name: "",
     password: "",
-    employee_id: "",
+    status: "active",
+    version: 0,
   });
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
   const { show, node } = useToast();
+  const confirm = useConfirm();
   const load = useCallback(async () => {
     setError("");
     try {
       const results = await Promise.allSettled([
-        api("/admin/users"),
+        apiPage<AdminUser>(
+          `/admin/users?q=${encodeURIComponent(debouncedUserQuery)}&page=${userPage}&limit=50`,
+        ),
         api("/admin/roles"),
         api("/admin/store"),
         api("/sync/devices"),
-        api("/admin/audit-logs?limit=100"),
-        api("/employees"),
+        apiPage<any>(`/admin/audit-logs?page=${auditPage}&limit=50`),
       ]);
-      if (results[0].status === "fulfilled")
-        setUsers(asArray(results[0].value));
+      if (results[0].status === "fulfilled") {
+        setUsers(results[0].value.items);
+        setUserMeta(results[0].value.meta);
+      }
       if (results[1].status === "fulfilled")
         setRoles(asArray(results[1].value));
       if (results[2].status === "fulfilled") setStore(results[2].value);
       if (results[3].status === "fulfilled")
         setDevices(asArray(results[3].value));
-      if (results[4].status === "fulfilled")
-        setAudit(asArray(results[4].value));
-      if (results[5].status === "fulfilled")
-        setEmployees(asArray(results[5].value));
+      if (results[4].status === "fulfilled") {
+        setAudit(results[4].value.items);
+        setAuditMeta(results[4].value.meta);
+      }
       const rejected = results.find((item) => item.status === "rejected");
       if (rejected?.status === "rejected")
         setError(
           rejected.reason instanceof Error
             ? rejected.reason.message
-            : "Sebagian data tidak dapat diakses",
+            : "Sebagian data administrasi belum dapat dimuat.",
         );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Gagal memuat administrasi");
     }
-  }, []);
+  }, [auditPage, debouncedUserQuery, userPage]);
   useEffect(() => {
     void load();
   }, [load]);
-  const createUser = async () => {
+  useEffect(() => {
+    setUserPage(1);
+  }, [debouncedUserQuery]);
+  const openCreateUser = () => {
+    const defaultEmployeeRole =
+      roles.find((item) => item.code === "cashier") ||
+      roles.find((item) => item.code !== "owner");
+    setSelected(null);
+    setUser({
+      role_id: defaultEmployeeRole?.id || "",
+      username: "",
+      full_name: "",
+      password: "",
+      status: "active",
+      version: 0,
+    });
+    setModal("user");
+  };
+  const openEditUser = (item: AdminUser) => {
+    setSelected(item);
+    setUser({
+      role_id: item.role_id,
+      username: item.username,
+      full_name: item.full_name,
+      password: "",
+      status: item.status,
+      version: item.version,
+    });
+    setModal("user");
+  };
+  const saveUser = async () => {
+    const payload = {
+      ...user,
+      role_id: user.role_id.trim(),
+      username: user.username.trim(),
+      full_name: user.full_name.trim(),
+    };
+    if (!isUUID(payload.role_id)) {
+      show(
+        "Hak akses yang dipilih tidak valid. Muat ulang halaman lalu pilih kembali hak akses.",
+        true,
+      );
+      return;
+    }
+    if (!payload.full_name) {
+      show("Nama lengkap wajib diisi.", true);
+      return;
+    }
+    if (!selected && !/^[a-zA-Z0-9._-]{3,80}$/.test(payload.username)) {
+      show(
+        "Nama pengguna harus 3–80 karakter dan hanya boleh berisi huruf, angka, titik, garis bawah, atau tanda hubung.",
+        true,
+      );
+      return;
+    }
+
     setSaving(true);
     try {
-      await api("/admin/users", json("POST", { ...user, employee_id: user.employee_id || null }));
-      show("Pengguna berhasil dibuat.");
+      await api(
+        selected ? `/admin/users/${selected.id}` : "/admin/users",
+        json(selected ? "PUT" : "POST", payload),
+      );
+      show(`Akun berhasil ${selected ? "diperbarui" : "dibuat"}.`);
       setModal(null);
-      setUser({ role_id: "", username: "", full_name: "", password: "", employee_id: "" });
       await load();
     } catch (e) {
-      show(e instanceof Error ? e.message : "Gagal membuat pengguna", true);
+      show(e instanceof Error ? e.message : "Gagal menyimpan akun", true);
     } finally {
       setSaving(false);
     }
@@ -115,6 +228,15 @@ export function AdminPage() {
     }
   };
   const saveStore = async () => {
+    if (
+      !(await confirm({
+        title: "Simpan pengaturan toko?",
+        message:
+          "Perubahan ini akan berlaku untuk transaksi dan operasional toko berikutnya.",
+        confirmLabel: "Simpan pengaturan",
+      }))
+    )
+      return;
     setSaving(true);
     try {
       setStore(await api("/admin/store", json("PUT", store)));
@@ -141,51 +263,57 @@ export function AdminPage() {
       setSaving(false);
     }
   };
+
+  const editingSelf = Boolean(selected && selected.id === sessionUser?.id);
+
   return (
     <>
       {node}
       <PageHeader
         title="Administrasi"
-        description="Kelola pengguna, hak akses, pengaturan toko, komputer kasir, dan riwayat aktivitas."
+        description="Buat akun karyawan terlebih dahulu, lalu lengkapi jabatan dan gajinya melalui menu Karyawan & Gaji."
         action={
           tab === "users" ? (
-            <Button onClick={() => setModal("user")}>
-              <Plus /> Tambah pengguna
+            <Button onClick={openCreateUser}>
+              <Plus /> Tambah akun karyawan
             </Button>
           ) : undefined
         }
       />
-      <div className="tabs admin-tabs">
-        <button
-          className={tab === "users" ? "active" : ""}
-          onClick={() => setTab("users")}
-        >
-          <Users /> Pengguna
-        </button>
-        <button
-          className={tab === "store" ? "active" : ""}
-          onClick={() => setTab("store")}
-        >
-          <Store /> Toko
-        </button>
-        <button
-          className={tab === "devices" ? "active" : ""}
-          onClick={() => setTab("devices")}
-        >
-          <ShieldCheck /> Komputer Kasir
-        </button>
-        <button
-          className={tab === "audit" ? "active" : ""}
-          onClick={() => setTab("audit")}
-        >
-          <FileClock /> Riwayat
-        </button>
-      </div>
+      <Tabs
+        value={tab}
+        onChange={(value) => setTab(value as typeof tab)}
+        items={[
+          { value: "users", label: "Pengguna", icon: <Users /> },
+          { value: "store", label: "Toko", icon: <Store /> },
+          { value: "devices", label: "Komputer kasir", icon: <ShieldCheck /> },
+          { value: "audit", label: "Riwayat aktivitas", icon: <FileClock /> },
+        ]}
+      />
       {error && <ErrorState message={error} retry={() => void load()} />}
       {tab === "users" && (
         <Card>
-          <div className="data-table-wrap">
-            <table className="data-table">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <SearchInput
+              value={userQuery}
+              onChange={setUserQuery}
+              placeholder="Cari nama atau nama pengguna..."
+            />
+            <Badge tone="info">{users.length} pengguna di halaman ini</Badge>
+          </div>
+          <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+            <strong className="block">Urutan pembuatan akun karyawan</strong>
+            <span>
+              Buat akun karyawan pada halaman ini terlebih dahulu. Akun otomatis
+              tercatat pada toko milik pemilik yang sedang masuk. Setelah akun
+              berhasil dibuat, buka menu <strong>Karyawan & Gaji</strong> untuk
+              melengkapi jabatan, sistem gaji, dan menghubungkan akun tersebut.
+              Relasi karyawan tidak dapat diubah dari Administrasi agar tidak
+              salah terhubung.
+            </span>
+          </div>
+          <div className="w-full overflow-auto rounded-xl">
+            <table className="w-full min-w-[940px] border-collapse text-[11px] [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-[#dfe7e2] [&_th]:bg-slate-50 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:font-bold [&_th]:text-slate-500 [&_td]:border-b [&_td]:border-slate-100 [&_td]:px-3 [&_td]:py-3 [&_td]:align-top [&_td]:text-slate-700 [&_tbody_tr:hover]:bg-slate-50 [&_td>strong]:block [&_td>small]:mt-1 [&_td>small]:block [&_td>small]:text-[10px] [&_td>small]:text-slate-500 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-1 [&_code]:text-[9px]">
               <thead>
                 <tr>
                   <th>Pengguna</th>
@@ -202,53 +330,82 @@ export function AdminPage() {
                     <td>
                       <strong>{item.full_name}</strong>
                       <small>@{item.username}</small>
+                      {item.id === sessionUser?.id && (
+                        <Badge tone="success">Akun Anda</Badge>
+                      )}
                     </td>
                     <td>
                       <Badge tone="info">{displayLabel(item.role)}</Badge>
                     </td>
                     <td>
                       {item.employee_id ? (
-                        <><strong>{item.employee_code}</strong><small>{item.position}</small></>
-                      ) : "—"}
+                        <>
+                          <strong>
+                            {item.employee_name || item.employee_code}
+                          </strong>
+                          <small>
+                            {item.employee_code} · {item.employee_position}
+                          </small>
+                        </>
+                      ) : (
+                        <span className="text-slate-400">Belum terhubung</span>
+                      )}
                     </td>
                     <td>{dateTime(item.last_login_at)}</td>
                     <td>
                       <Badge
-                        tone={item.status === "active" ? "success" : "danger"}
+                        tone={
+                          item.status === "active"
+                            ? "success"
+                            : item.status === "locked"
+                              ? "warning"
+                              : "danger"
+                        }
                       >
                         {displayLabel(item.status)}
                       </Badge>
                     </td>
                     <td>
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setSelected(item);
-                          setModal("reset");
-                        }}
-                      >
-                        <KeyRound /> Ganti kata sandi
-                      </Button>
+                      <div className="flex flex-wrap items-center justify-end gap-1.5">
+                        <Button
+                          variant="ghost"
+                          onClick={() => openEditUser(item)}
+                        >
+                          <Pencil /> Ubah
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setSelected(item);
+                            setModal("reset");
+                          }}
+                        >
+                          <KeyRound /> Ganti kata sandi
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
             {!users.length && (
-              <EmptyState title="Data pengguna tidak tersedia" />
+              <EmptyState title="Belum ada akun tambahan" description="Buat akun karyawan sebelum menambahkan data Karyawan & Gaji." />
             )}
           </div>
+          <Pagination meta={userMeta} onPageChange={setUserPage} />
         </Card>
       )}
       {tab === "store" && (
         <Card title="Profil & pengaturan toko">
           {store ? (
-            <div className="store-form">
-              <div className="form-grid">
+            <div className="">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <Select
                   label="Jenis usaha"
                   value={store.business_type || "grocery"}
-                  onChange={(e) => setStore({ ...store, business_type: e.target.value })}
+                  onChange={(e) =>
+                    setStore({ ...store, business_type: e.target.value })
+                  }
                 >
                   <option value="grocery">Toko sembako</option>
                   <option value="cafe_restaurant">Kafe & restoran</option>
@@ -315,7 +472,7 @@ export function AdminPage() {
                   setStore({ ...store, receipt_footer: e.target.value })
                 }
               />
-              <div className="settings-checks">
+              <div className="my-4 grid grid-cols-1 gap-3 md:grid-cols-2 [&_label]:flex [&_label]:gap-3 [&_label]:rounded-xl [&_label]:border [&_label]:border-[#dfe7e2] [&_label]:p-3 [&_input]:accent-brand-700 [&_span]:flex [&_span]:flex-col [&_strong]:text-[10px] [&_small]:mt-1 [&_small]:text-[8px] [&_small]:text-slate-500">
                 <label>
                   <input
                     type="checkbox"
@@ -362,14 +519,14 @@ export function AdminPage() {
       )}
       {tab === "devices" && (
         <Card>
-          <div className="device-list">
+          <div className="[&_article]:flex [&_article]:items-center [&_article]:gap-3 [&_article]:border-b [&_article]:border-[#dfe7e2] [&_article]:py-3 [&_strong]:text-xs [&_small]:text-[10px] [&_small]:text-slate-500">
             {devices.map((item) => (
               <article key={item.id}>
                 <span
                   className={
                     item.status === "active"
-                      ? "device-online"
-                      : "device-offline"
+                      ? "grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700"
+                      : "grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-50 text-red-700"
                   }
                 >
                   <ShieldCheck />
@@ -402,8 +559,8 @@ export function AdminPage() {
       )}
       {tab === "audit" && (
         <Card>
-          <div className="data-table-wrap">
-            <table className="data-table">
+          <div className="w-full overflow-auto rounded-xl">
+            <table className="w-full min-w-[760px] border-collapse text-[11px] [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-[#dfe7e2] [&_th]:bg-slate-50 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-left [&_th]:font-bold [&_th]:text-slate-500 [&_td]:border-b [&_td]:border-slate-100 [&_td]:px-3 [&_td]:py-3 [&_td]:align-top [&_td]:text-slate-700 [&_tbody_tr:hover]:bg-slate-50 [&_td>strong]:block [&_td>small]:mt-1 [&_td>small]:block [&_td>small]:text-[10px] [&_td>small]:text-slate-500 [&_code]:rounded [&_code]:bg-slate-100 [&_code]:px-1.5 [&_code]:py-1 [&_code]:text-[9px]">
               <thead>
                 <tr>
                   <th>Waktu</th>
@@ -427,57 +584,91 @@ export function AdminPage() {
               <EmptyState title="Belum ada riwayat aktivitas" />
             )}
           </div>
+          <Pagination meta={auditMeta} onPageChange={setAuditPage} />
         </Card>
       )}
       <Modal
         open={modal === "user"}
-        title="Tambah pengguna"
+        title={selected ? "Ubah akun" : "Tambah akun karyawan"}
         onClose={() => setModal(null)}
+        wide
       >
-        <Select
-          label="Hak akses"
-          value={user.role_id}
-          onChange={(e) => setUser({ ...user, role_id: e.target.value })}
-        >
-          <option value="">Pilih hak akses</option>
-          {roles.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </Select>
-        <Select
-          label="Hubungkan dengan karyawan (opsional)"
-          value={user.employee_id}
-          onChange={(e) => {
-            const employee = employees.find((item) => item.id === e.target.value);
-            setUser({ ...user, employee_id: e.target.value, full_name: employee?.full_name || user.full_name });
-          }}
-        >
-          <option value="">Tanpa data karyawan</option>
-          {employees.filter((item) => !item.user_id).map((item) => (
-            <option key={item.id} value={item.id}>{item.employee_code} — {item.full_name}</option>
-          ))}
-        </Select>
-        <Input
-          label="Nama lengkap"
-          value={user.full_name}
-          onChange={(e) => setUser({ ...user, full_name: e.target.value })}
-        />
-        <Input
-          label="Nama pengguna"
-          value={user.username}
-          onChange={(e) => setUser({ ...user, username: e.target.value })}
-        />
-        <Input
-          label="Kata sandi awal"
-          type="password"
-          minLength={12}
-          value={user.password}
-          onChange={(e) => setUser({ ...user, password: e.target.value })}
-          hint="Minimal 12 karakter"
-        />
-        <div className="modal-actions">
+        <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-800">
+          Akun baru otomatis terikat ke toko Anda. Setelah akun tersimpan, buka
+          <strong> Karyawan & Gaji</strong> untuk melengkapi data kerja. Hubungan akun
+          dengan karyawan tidak dilakukan dari halaman Administrasi.
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Select
+            label="Hak akses"
+            value={user.role_id}
+            onChange={(e) => setUser({ ...user, role_id: e.target.value })}
+          >
+            <option value="">Pilih hak akses</option>
+            {roles
+              .filter((item) => selected || item.code !== "owner")
+              .map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+          </Select>
+          <Input
+            label="Nama lengkap"
+            value={user.full_name}
+            maxLength={150}
+            onChange={(e) => setUser({ ...user, full_name: e.target.value })}
+          />
+          {!selected && (
+            <>
+              <Input
+                label="Nama pengguna"
+                value={user.username}
+                maxLength={80}
+                autoComplete="username"
+                onChange={(e) =>
+                  setUser({
+                    ...user,
+                    username: e.target.value.toLocaleLowerCase("id-ID"),
+                  })
+                }
+                hint="Gunakan huruf, angka, titik, garis bawah, atau tanda hubung."
+              />
+              <Input
+                label="Kata sandi awal"
+                type="password"
+                minLength={12}
+                maxLength={128}
+                autoComplete="new-password"
+                value={user.password}
+                onChange={(e) => setUser({ ...user, password: e.target.value })}
+                hint="Minimal 12 karakter"
+              />
+            </>
+          )}
+          {selected && (
+            <Select
+              label="Status akses"
+              value={user.status}
+              disabled={editingSelf}
+              onChange={(e) => setUser({ ...user, status: e.target.value })}
+            >
+              <option value="active">Aktif</option>
+              <option value="inactive">Nonaktif</option>
+              <option value="locked">Terkunci</option>
+            </Select>
+          )}
+        </div>
+        {editingSelf && (
+          <div className="mt-3 flex gap-3 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-5 text-blue-800">
+            <ShieldCheck />
+            <span>
+              Status akun yang sedang digunakan tidak dapat dinonaktifkan atau
+              dikunci.
+            </span>
+          </div>
+        )}
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>
@@ -485,13 +676,14 @@ export function AdminPage() {
             loading={saving}
             disabled={
               !user.role_id ||
-              !user.full_name ||
-              !user.username ||
-              user.password.length < 12
+              !user.full_name.trim() ||
+              (!selected &&
+                (!/^[a-zA-Z0-9._-]{3,80}$/.test(user.username) ||
+                  user.password.length < 12))
             }
-            onClick={() => void createUser()}
+            onClick={() => void saveUser()}
           >
-            Buat pengguna
+            {selected ? "Simpan perubahan" : "Buat akun"}
           </Button>
         </div>
       </Modal>
@@ -508,7 +700,7 @@ export function AdminPage() {
           onChange={(e) => setPassword(e.target.value)}
           hint="Minimal 12 karakter. Gunakan kombinasi yang sulit ditebak."
         />
-        <div className="modal-actions">
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>
@@ -526,7 +718,7 @@ export function AdminPage() {
         title="Hentikan akses komputer"
         onClose={() => setModal(null)}
       >
-        <div className="confirm-panel">
+        <div className="p-3 text-center [&>svg]:mx-auto [&>svg]:h-11 [&>svg]:w-11 [&>svg]:rounded-full [&>svg]:bg-brand-50 [&>svg]:p-2.5 [&>svg]:text-brand-700 [&_p]:text-xs [&_p]:leading-6 [&_p]:text-slate-500">
           <WifiOff />
           <h3>{selected?.name}</h3>
           <p>
@@ -534,7 +726,7 @@ export function AdminPage() {
             kembali jika komputer akan digunakan lagi.
           </p>
         </div>
-        <div className="modal-actions">
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>

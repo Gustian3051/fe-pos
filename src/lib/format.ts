@@ -44,6 +44,7 @@ const labels: Record<string, string> = {
   voided: "Dibatalkan",
   open: "Aktif",
   draft: "Menunggu barang",
+  partially_received: "Diterima sebagian",
   received: "Diterima",
   paid: "Lunas",
   owner: "Pemilik",
@@ -54,6 +55,11 @@ const labels: Record<string, string> = {
   transfer: "Transfer",
   qris: "QRIS",
   debt: "Utang",
+  monthly: "Bulanan",
+  daily: "Harian",
+  hourly: "Per jam",
+  manual: "Manual",
+  cancelled: "Dibatalkan",
   other: "Lainnya",
   catalog: "Produk",
   inventory: "Persediaan",
@@ -69,6 +75,7 @@ export const displayLabel = (value?: string | null) =>
   value ? labels[value] || value.replaceAll("_", " ") : "—";
 
 const activityLabels: Record<string, string> = {
+  "auth.register": "Mendaftarkan toko dan akun pemilik",
   "auth.bootstrap": "Membuat akun pemilik",
   "auth.login": "Masuk ke aplikasi",
   "auth.login_failed": "Percobaan masuk gagal",
@@ -85,9 +92,20 @@ const activityLabels: Record<string, string> = {
   "supplier.create": "Menambah pemasok",
   "purchase.create": "Mencatat pembelian",
   "purchase.receive": "Menerima barang",
+  "payable.manual.create": "Mencatat hutang pemasok manual",
+  "payable.pay": "Membayar cicilan hutang pemasok",
+  "supplier_receivable.manual.create": "Mencatat piutang pemasok manual",
+  "supplier_receivable.pay": "Menerima cicilan piutang pemasok",
+  "employee.salary.create": "Mencatat pembayaran gaji",
   "customer.create": "Menambah pelanggan",
   "cash_movement.create": "Mencatat pergerakan kas",
 };
 
 export const activityLabel = (value?: string | null) =>
   value ? activityLabels[value] || "Memperbarui data" : "Aktivitas toko";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export const isUUID = (value: unknown): value is string =>
+  typeof value === "string" && UUID_PATTERN.test(value.trim());

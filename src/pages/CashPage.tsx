@@ -32,6 +32,7 @@ export function CashPage() {
   const [closing, setClosing] = useState({ actual_amount: 0, notes: "" });
   const [movement, setMovement] = useState({
     movement_type: "expense",
+    fund_source: "cashier",
     direction: "out",
     amount: 0,
     category: "",
@@ -105,7 +106,7 @@ export function CashPage() {
         description="Buka dan tutup sif, rekonsiliasi uang tunai, serta catat pergerakan kas."
         action={
           shift ? (
-            <div className="button-row">
+            <div className="flex flex-wrap items-center gap-2">
               {can("cash.manage") && <Button variant="secondary" onClick={() => setModal("movement")}>
                 <Banknote /> Pergerakan kas
               </Button>}
@@ -121,21 +122,21 @@ export function CashPage() {
         }
       />
       {shift ? (
-        <div className="cash-layout">
-          <Card className="shift-hero">
-            <div className="shift-status">
+        <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.25fr_.75fr]">
+          <Card className="flex min-h-[290px] flex-col border-0 bg-gradient-to-br from-brand-900 to-brand-700 text-white">
+            <div className="flex justify-between [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span]:text-[9px] [&>span]:font-extrabold [&>span]:tracking-widest">
               <span>
-                <span className="pulse" /> SIF AKTIF
+                <span className="h-2 w-2 rounded-full bg-emerald-300 shadow-[0_0_0_5px_rgba(114,224,169,0.14)]" /> SIF AKTIF
               </span>
               <Badge tone="success">Aktif</Badge>
             </div>
             <h2>{dateTime(shift.opened_at)}</h2>
             <p>Sif kasir sedang berjalan dan siap mencatat transaksi tunai.</p>
-            <div className="shift-money">
+            <div className="mt-auto flex flex-col [&_small]:text-[10px] [&_small]:text-emerald-100/75 [&_strong]:text-3xl">
               <small>Modal awal</small>
               <strong>{rupiah(shift.opening_amount)}</strong>
             </div>
-            <div className="shift-meta">
+            <div className="mt-5 flex flex-wrap gap-6 border-t border-white/10 pt-3 [&_span]:flex [&_span]:flex-col [&_span]:text-[9px] [&_span]:text-emerald-100/70 [&_b]:mt-1 [&_b]:text-white">
               <span>
                 Dibuka pada <b>{dateTime(shift.opened_at)}</b>
               </span>
@@ -144,7 +145,7 @@ export function CashPage() {
               </span>
             </div>
           </Card>
-          {can("cash.manage") && <div className="cash-action-grid">
+          {can("cash.manage") && <div className="grid gap-3 [&_button]:flex [&_button]:items-center [&_button]:gap-3 [&_button]:rounded-xl [&_button]:border [&_button]:border-[#dfe7e2] [&_button]:bg-white [&_button]:p-5 [&_button]:text-left [&_button>svg]:h-8 [&_button>svg]:w-8 [&_button>svg]:text-brand-700 [&_span]:flex [&_span]:flex-col [&_strong]:text-xs [&_small]:mt-1 [&_small]:text-[10px] [&_small]:text-slate-500">
             <button
               onClick={() => {
                 setMovement({
@@ -180,7 +181,7 @@ export function CashPage() {
           </div>}
         </div>
       ) : (
-        <Card className="no-shift">
+        <Card className="px-5 py-16 text-center [&>span]:mx-auto [&>span]:grid [&>span]:h-16 [&>span]:w-16 [&>span]:place-items-center [&>span]:rounded-full [&>span]:bg-brand-50 [&>span]:text-brand-700 [&_h2]:text-lg [&_p]:text-xs [&_p]:text-slate-500">
           <span>
             <Banknote />
           </span>
@@ -207,7 +208,7 @@ export function CashPage() {
           value={opening}
           onChange={(e) => setOpening(Number(e.target.value))}
         />
-        <div className="modal-actions">
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>
@@ -221,7 +222,7 @@ export function CashPage() {
         title="Tutup & rekonsiliasi sif"
         onClose={() => setModal(null)}
       >
-        <div className="payment-total">
+        <div className="mb-4 flex items-center justify-between gap-3 rounded-xl bg-brand-50 p-4 [&_span]:text-xs [&_span]:text-slate-500 [&_strong]:text-2xl [&_strong]:text-brand-700">
           <span>Modal awal</span>
           <strong>{rupiah(shift?.opening_amount)}</strong>
         </div>
@@ -239,7 +240,7 @@ export function CashPage() {
           value={closing.notes}
           onChange={(e) => setClosing({ ...closing, notes: e.target.value })}
         />
-        <div className="modal-actions">
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>
@@ -257,7 +258,7 @@ export function CashPage() {
         title="Catat pergerakan kas"
         onClose={() => setModal(null)}
       >
-        <div className="form-grid">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Select
             label="Jenis"
             value={movement.movement_type}
@@ -270,6 +271,16 @@ export function CashPage() {
             <option value="capital">Modal</option>
             <option value="owner_draw">Pengambilan pemilik</option>
             <option value="correction">Koreksi</option>
+          </Select>
+          <Select
+            label="Sumber dana"
+            value={movement.fund_source}
+            onChange={(e) =>
+              setMovement({ ...movement, fund_source: e.target.value })
+            }
+          >
+            <option value="cashier">Uang kasir</option>
+            <option value="owner">Uang owner</option>
           </Select>
           <Select
             label="Arah"
@@ -303,7 +314,7 @@ export function CashPage() {
           value={movement.notes}
           onChange={(e) => setMovement({ ...movement, notes: e.target.value })}
         />
-        <div className="modal-actions">
+        <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
           <Button variant="secondary" onClick={() => setModal(null)}>
             Batal
           </Button>

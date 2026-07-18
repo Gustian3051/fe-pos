@@ -2,7 +2,9 @@
 
 Frontend POS berbasis React, TypeScript, Vite, dan Tailwind CSS untuk toko sembako, kafe/restoran, apotek, dan toko bangunan.
 
-Pemilik toko memiliki akses khusus untuk menghapus produk/karyawan yang belum memiliki riwayat, menghubungkan akun administrasi dengan karyawan, dan mengelola pembayaran gaji bulanan. Katalog menyesuaikan profil usaha, menampilkan HPP rata-rata tertimbang, serta menyediakan penyusun resep dan HPP menu otomatis.
+Pemilik toko memiliki akses khusus untuk menghapus produk/karyawan yang belum memiliki riwayat, membuat akun karyawan melalui Administrasi, menghubungkannya dari menu Karyawan & Gaji, serta mengelola pembayaran gaji bulanan, harian, dan per jam. Kode karyawan dibuat otomatis oleh backend dan tidak dapat diubah manual. Katalog menyesuaikan profil usaha, menampilkan harga pokok rata-rata tertimbang, serta menyediakan penyusun resep dan perhitungan harga pokok menu otomatis.
+
+Pada formulir produk, pilih **Produk siap jual — tanpa bahan** untuk barang seperti air mineral. Pilih **Produk racikan — wajib memiliki bahan** untuk produk seperti Red Velvet, lalu tambahkan satu atau banyak bahan. Bahan seperti susu, bubuk Red Velvet, gula, dan es harus dibuat terlebih dahulu sebagai **Bahan baku**.
 
 ## Menjalankan
 

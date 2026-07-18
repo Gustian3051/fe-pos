@@ -13,12 +13,13 @@ import { useAuth } from "../auth/AuthContext";
 import { ApiError } from "../lib/api";
 
 export function LoginPage() {
-  const { login, bootstrap } = useAuth();
-  const [mode, setMode] = useState<"login" | "bootstrap">("login");
+  const { login, register } = useAuth();
+  const [mode, setMode] = useState<"login" | "register">("login");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [form, setForm] = useState({
+    store_name: "",
     username: "",
     full_name: "",
     password: "",
@@ -29,8 +30,18 @@ export function LoginPage() {
     setLoading(true);
     setError("");
     try {
-      if (mode === "bootstrap") await bootstrap(form);
-      else await login(form);
+      if (mode === "register") {
+        if (!form.store_name.trim()) {
+          setError("Nama toko wajib diisi.");
+          return;
+        }
+        await register(form);
+      } else {
+        await login({
+          username: form.username.trim(),
+          password: form.password,
+        });
+      }
     } catch (reason) {
       setError(
         reason instanceof ApiError
@@ -69,7 +80,7 @@ export function LoginPage() {
           </h1>
           <p className="mt-7 max-w-xl text-base leading-8 text-emerald-50/80">
             Kelola penjualan, persediaan, pembelian, utang-piutang, dan laporan
-            toko sembako dengan alur yang sederhana.
+            toko dengan alur yang sederhana.
           </p>
         </div>
         <div className="relative z-10 flex flex-wrap gap-3 text-xs font-semibold text-emerald-50/90">
@@ -97,15 +108,15 @@ export function LoginPage() {
             WarungKasir
           </div>
           <p className="mb-3 text-xs font-extrabold tracking-[.16em] text-brand-600">
-            {mode === "login" ? "SELAMAT DATANG KEMBALI" : "PENGATURAN AWAL"}
+            {mode === "login" ? "SELAMAT DATANG KEMBALI" : "DAFTARKAN TOKO"}
           </p>
           <h2 className="text-3xl font-extrabold tracking-[-.035em] text-slate-900">
-            {mode === "login" ? "Masuk ke akun Anda" : "Buat akun pemilik"}
+            {mode === "login" ? "Masuk ke akun Anda" : "Buat toko dan akun pemilik"}
           </h2>
           <p className="mb-8 mt-3 text-sm leading-6 text-slate-500">
             {mode === "login"
               ? "Masukkan nama pengguna dan kata sandi untuk melanjutkan."
-              : "Langkah ini hanya dilakukan sekali saat toko mulai menggunakan WarungKasir."}
+              : "Masukkan nama toko dan data pemilik. Sistem akan membuat ruang data toko baru tanpa data contoh."}
           </p>
 
           {error && (
@@ -114,21 +125,43 @@ export function LoginPage() {
             </div>
           )}
 
-          {mode === "bootstrap" && (
-            <label className="mb-5 block">
-              <span className="mb-2 block text-sm font-bold text-slate-700">
-                Nama lengkap
-              </span>
-              <input
-                className={fieldClass}
-                value={form.full_name}
-                onChange={(event) =>
-                  setForm({ ...form, full_name: event.target.value })
-                }
-                placeholder="Nama pemilik toko"
-                required
-              />
-            </label>
+          {mode === "register" && (
+            <>
+              <label className="mb-5 block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">
+                  Nama toko
+                </span>
+                <input
+                  className={fieldClass}
+                  value={form.store_name}
+                  onChange={(event) =>
+                    setForm({ ...form, store_name: event.target.value })
+                  }
+                  placeholder="Contoh: Toko Sumber Rezeki"
+                  autoComplete="organization"
+                  required
+                  minLength={2}
+                  maxLength={150}
+                />
+              </label>
+              <label className="mb-5 block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">
+                  Nama lengkap pemilik
+                </span>
+                <input
+                  className={fieldClass}
+                  value={form.full_name}
+                  onChange={(event) =>
+                    setForm({ ...form, full_name: event.target.value })
+                  }
+                  placeholder="Nama pemilik toko"
+                  autoComplete="name"
+                  required
+                  minLength={2}
+                  maxLength={150}
+                />
+              </label>
+            </>
           )}
           <label className="mb-5 block">
             <span className="mb-2 block text-sm font-bold text-slate-700">
@@ -143,6 +176,8 @@ export function LoginPage() {
               placeholder="Masukkan nama pengguna"
               autoComplete="username"
               required
+              minLength={mode === "register" ? 3 : undefined}
+              maxLength={80}
             />
           </label>
           <label className="mb-5 block">
@@ -159,13 +194,14 @@ export function LoginPage() {
                   setForm({ ...form, password: event.target.value })
                 }
                 placeholder={
-                  mode === "bootstrap"
+                  mode === "register"
                     ? "Minimal 12 karakter"
                     : "Masukkan kata sandi"
                 }
-                autoComplete="current-password"
+                autoComplete={mode === "register" ? "new-password" : "current-password"}
                 required
-                minLength={mode === "bootstrap" ? 12 : 8}
+                minLength={mode === "register" ? 12 : 8}
+                maxLength={mode === "register" ? 128 : undefined}
               />
               <button
                 className="px-4 text-slate-400 hover:text-brand-700"
@@ -191,19 +227,19 @@ export function LoginPage() {
               ? "Mohon tunggu..."
               : mode === "login"
                 ? "Masuk ke WarungKasir"
-                : "Buat akun & masuk"}
+                : "Daftarkan toko & masuk"}
             {!loading && <ArrowRight size={18} />}
           </button>
           <button
             className="mx-auto mt-5 block text-sm font-bold text-brand-700 hover:text-brand-900"
             type="button"
             onClick={() => {
-              setMode(mode === "login" ? "bootstrap" : "login");
+              setMode(mode === "login" ? "register" : "login");
               setError("");
             }}
           >
             {mode === "login"
-              ? "Baru pertama kali menggunakan WarungKasir?"
+              ? "Belum memiliki akun? Daftarkan toko"
               : "Sudah memiliki akun? Kembali ke halaman masuk"}
           </button>
         </form>
