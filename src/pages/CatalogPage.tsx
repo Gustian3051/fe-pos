@@ -1,5 +1,4 @@
 import {
-  Barcode,
   Boxes,
   Calculator,
   FileText,
@@ -14,6 +13,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useAlert, useConfirm } from "../components/feedback";
 import { api, apiPage, json } from "../lib/api";
 import { asArray, displayLabel, quantity, rupiah } from "../lib/format";
+import { getBusinessProfile } from "../lib/business";
 import { useDebouncedValue } from "../lib/hooks";
 import { printTable } from "../lib/print";
 import type { Product, ProductRecipe, ProductUnit } from "../types/api";
@@ -33,32 +33,9 @@ import {
   useToast,
 } from "../components/ui";
 const defaultProductKind = (type: string) =>
-  type === "pharmacy"
-    ? "medicine"
-    : type === "building_materials"
-      ? "material"
-      : "stock";
-const productKindOptions = (type: string) => {
-  const composable = [
-    ["stock", "Produk siap jual — tanpa bahan"],
-    ["menu", "Produk racikan — wajib memiliki bahan"],
-    ["ingredient", "Bahan baku — untuk produk racikan"],
-    ["service", "Jasa — tanpa stok dan bahan"],
-  ];
-  if (type === "pharmacy") {
-    return [
-      ["medicine", "Obat jadi — tanpa komposisi produksi"],
-      ...composable,
-    ];
-  }
-  if (type === "building_materials") {
-    return [
-      ["material", "Material jadi — tanpa komposisi produksi"],
-      ...composable,
-    ];
-  }
-  return composable;
-};
+  getBusinessProfile(type).defaultProductKind;
+const productKindOptions = (type: string) =>
+  getBusinessProfile(type).productKinds;
 const blankProduct = (type: string) => ({
   sku: "",
   barcode: "",
@@ -78,6 +55,12 @@ const blankProduct = (type: string) => ({
     requires_prescription: false,
     specification: "",
     dimensions: "",
+    material: "",
+    color: "",
+    part_number: "",
+    vehicle_compatibility: "",
+    warranty: "",
+    service_duration_minutes: 0,
   },
 });
 const blankRecipe = () => ({
@@ -578,6 +561,7 @@ export function CatalogPage() {
     }
   };
 
+  const businessProfile = getBusinessProfile(store.business_type);
   const productKinds = productKindOptions(store.business_type);
   const duplicateRecipeIngredients = recipe.items.some(
     (item, index) =>
@@ -1048,41 +1032,108 @@ export function CatalogPage() {
             />
           </>
         ) : (
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 [&_article]:flex [&_article]:items-center [&_article]:gap-3 [&_article]:rounded-xl [&_article]:border [&_article]:border-[#dfe7e2] [&_article]:p-3">
-            {(tab === "categories" ? categories : units).map((item) => (
-              <article key={item.id}>
-                <span className="grid h-9 w-9 place-items-center rounded-lg bg-brand-50 text-brand-700 [&_svg]:h-4 [&_svg]:w-4">
+          <div className="grid gap-4">
+            <div className="flex flex-col gap-3 rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 to-white p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-brand-700 shadow-sm [&_svg]:h-5 [&_svg]:w-5">
                   {tab === "categories" ? <Layers3 /> : <Ruler />}
                 </span>
-                <div>
-                  <strong>{item.name}</strong>
-                  <small>
+                <div className="min-w-0">
+                  <h2 className="m-0 text-sm font-bold text-slate-900">
+                    {tab === "categories" ? "Daftar kategori" : "Daftar satuan"}
+                  </h2>
+                  <p className="m-0 mt-1 text-[11px] leading-5 text-slate-500">
                     {tab === "categories"
-                      ? displayLabel(item.status)
-                      : `${item.code} · ${item.allows_fraction ? "Boleh pecahan" : "Bilangan utuh"}`}
-                  </small>
+                      ? "Kategori membantu produk lebih mudah dikelompokkan dan dicari."
+                      : "Satuan menentukan cara produk dijual, dibeli, dan dihitung stoknya."}
+                  </p>
                 </div>
-                {can("product.manage") && (
-                  <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <Button
-                      variant="ghost"
-                      onClick={() => openSimpleEdit(item)}
-                    >
-                      <Pencil /> Edit
-                    </Button>
-                    {user?.role === "owner" && (
-                      <Button
-                        variant="ghost"
-                        loading={saving}
-                        onClick={() => void deleteSimple(item)}
-                      >
-                        <Trash2 /> Hapus
-                      </Button>
+              </div>
+              <Badge tone="info">
+                {(tab === "categories" ? categories : units).length} data
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {(tab === "categories" ? categories : units).map((item) => (
+                <article
+                  key={item.id}
+                  className="group relative flex min-h-[170px] min-w-0 flex-col overflow-hidden rounded-2xl border border-[#dfe7e2] bg-white p-4 shadow-[0_3px_10px_rgba(20,45,32,0.035)] transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-[0_14px_30px_rgba(20,45,32,0.09)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700 transition group-hover:bg-brand-100 [&_svg]:h-5 [&_svg]:w-5">
+                      {tab === "categories" ? <Layers3 /> : <Ruler />}
+                    </span>
+                    {tab === "categories" ? (
+                      <Badge tone={item.status === "active" ? "success" : "neutral"}>
+                        {displayLabel(item.status)}
+                      </Badge>
+                    ) : (
+                      <span className="rounded-lg bg-slate-100 px-2.5 py-1.5 font-mono text-[10px] font-extrabold text-slate-600">
+                        {item.code}
+                      </span>
                     )}
                   </div>
-                )}
-              </article>
-            ))}
+
+                  <div className="mt-4 min-w-0">
+                    <strong className="block truncate text-[15px] text-slate-950">
+                      {item.name}
+                    </strong>
+                    <small className="mt-1.5 block text-[11px] leading-5 text-slate-500">
+                      {tab === "categories"
+                        ? "Digunakan untuk mengelompokkan produk pada katalog dan pencarian kasir."
+                        : item.allows_fraction
+                          ? "Dapat digunakan untuk jumlah pecahan, misalnya kilogram atau liter."
+                          : "Hanya menerima jumlah bilangan utuh pada transaksi dan stok."}
+                    </small>
+                  </div>
+
+                  <div className="mt-auto flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                    <span className="text-[10px] font-semibold text-slate-500">
+                      {tab === "categories"
+                        ? "Kelompok produk"
+                        : item.allows_fraction
+                          ? "Mendukung pecahan"
+                          : "Bilangan utuh"}
+                    </span>
+                    {can("product.manage") && (
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          className="px-2.5"
+                          variant="ghost"
+                          onClick={() => openSimpleEdit(item)}
+                        >
+                          <Pencil /> Edit
+                        </Button>
+                        {user?.role === "owner" && (
+                          <Button
+                            className="px-2.5 text-red-700 hover:bg-red-50"
+                            variant="ghost"
+                            loading={saving}
+                            onClick={() => void deleteSimple(item)}
+                          >
+                            <Trash2 /> Hapus
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            {!(tab === "categories" ? categories : units).length && (
+              <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50">
+                <EmptyState
+                  title={tab === "categories" ? "Belum ada kategori" : "Belum ada satuan"}
+                  description={
+                    tab === "categories"
+                      ? "Tambahkan kategori agar daftar produk lebih teratur."
+                      : "Tambahkan satuan yang digunakan pada penjualan dan pembelian."
+                  }
+                />
+              </div>
+            )}
           </div>
         )}
       </Card>
@@ -1094,6 +1145,19 @@ export function CatalogPage() {
         className="md:w-[min(1120px,calc(100vw-72px))] md:max-h-[calc(100dvh-48px)] md:rounded-[18px]"
       >
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div className="col-span-full flex flex-col gap-1 rounded-2xl border border-brand-700/15 bg-brand-50 p-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+            <div>
+              <strong className="text-sm font-extrabold text-brand-950">
+                Panduan {businessProfile.label}
+              </strong>
+              <p className="mt-1 text-xs leading-5 text-slate-600">
+                {businessProfile.description}
+              </p>
+            </div>
+            <small className="max-w-md text-xs leading-5 text-slate-500 sm:text-right">
+              Contoh, istilah, kategori, dan satuan pada formulir ini mengikuti jenis usaha yang dipilih pada profil toko.
+            </small>
+          </div>
           <Input
             label="Kode produk (SKU)"
             value={product.sku}
@@ -1102,7 +1166,7 @@ export function CatalogPage() {
               setProduct({ ...product, sku: e.target.value.toUpperCase() })
             }
             required
-            hint="Gunakan kode singkat tanpa spasi, misalnya SURYA-12 atau NASI-GORENG."
+            hint={businessProfile.skuExample}
           />
           <Input
             label="Barcode produk / satuan terkecil"
@@ -1120,17 +1184,19 @@ export function CatalogPage() {
                 );
               }
             }}
-            hint="Untuk produk dengan banyak satuan, barcode bisa diatur lagi per satuan pada tombol Tambah satuan."
+            hint={businessProfile.barcodeHint}
           />
           <Input
             label="Nama produk"
             value={product.name}
+            placeholder={businessProfile.productNamePlaceholder}
             maxLength={180}
             onChange={(e) => setProduct({ ...product, name: e.target.value })}
           />
           <Input
             label="Merek"
             value={product.brand}
+            placeholder={businessProfile.brandPlaceholder}
             maxLength={100}
             onChange={(e) => setProduct({ ...product, brand: e.target.value })}
           />
@@ -1161,7 +1227,7 @@ export function CatalogPage() {
                   minimum_stock: Number(e.target.value),
                 })
               }
-              hint="Batas stok dihitung dalam satuan terkecil. Contoh: nilai 24 berarti stok minimum 24 batang."
+              hint={businessProfile.minimumStockHint}
             />
           ) : (
             <Select
@@ -1193,33 +1259,10 @@ export function CatalogPage() {
                 </option>
               ))}
             </Select>
-            {["menu", "stock", "ingredient"].includes(product.product_kind) && (
-              <div className="flex min-h-[68px] flex-col justify-center gap-1 rounded-xl border border-[#dfe7e2] bg-brand-50 p-4 text-sm text-slate-600 [&_strong]:text-base [&_strong]:font-extrabold [&_strong]:text-slate-900 [&_span]:text-slate-500 [&_span]:leading-6 min-h-[112px] h-full justify-start">
-                {product.product_kind === "menu" ? (
-                  <>
-                    <strong>Produk racikan</strong>
-                    <span>
-                      Contoh Red Velvet. Wajib memiliki satu atau lebih bahan;
-                      stok setiap bahan akan berkurang saat produk dijual.
-                    </span>
-                  </>
-                ) : product.product_kind === "stock" ? (
-                  <>
-                    <strong>Produk siap jual</strong>
-                    <span>
-                      Contoh air mineral. Tidak memerlukan bahan; stok air
-                      mineral sendiri akan berkurang saat dijual.
-                    </span>
-                  </>
-                ) : product.product_kind === "ingredient" ? (
-                  <>
-                    <strong>Bahan baku</strong>
-                    <span>
-                      Buat bahan seperti susu, bubuk Red Velvet, gula, dan es
-                      lebih dahulu agar dapat dipilih pada produk racikan.
-                    </span>
-                  </>
-                ) : null}
+            {businessProfile.kindHelp[product.product_kind] && (
+              <div className="flex min-h-[112px] h-full flex-col justify-start gap-1 rounded-xl border border-[#dfe7e2] bg-brand-50 p-4 text-sm text-slate-600 [&_strong]:text-base [&_strong]:font-extrabold [&_strong]:text-slate-900 [&_span]:leading-6 [&_span]:text-slate-500">
+                <strong>{businessProfile.kindHelp[product.product_kind].title}</strong>
+                <span>{businessProfile.kindHelp[product.product_kind].description}</span>
               </div>
             )}
           </div>
@@ -1254,9 +1297,7 @@ export function CatalogPage() {
             <div className="flex min-h-[68px] flex-col justify-center gap-1 rounded-xl border border-[#dfe7e2] bg-brand-50 p-4 text-sm text-slate-600 [&_strong]:text-base [&_strong]:font-extrabold [&_strong]:text-slate-900 [&_span]:text-slate-500 [&_span]:leading-6 min-h-[112px] h-full justify-start">
               <strong>Alur satuan produk</strong>
               <span>
-                Mulai dari satuan terkecil. Contoh rokok: pilih batang,
-                lalu tambahkan bungkus dan slop dengan isi, barcode, harga jual,
-                serta harga beli masing-masing.
+                {businessProfile.unitFlowDescription}
               </span>
             </div>
           </div>
@@ -1266,9 +1307,7 @@ export function CatalogPage() {
                 <div>
                   <h3>Satuan, harga jual, dan harga beli</h3>
                   <p>
-                    Input semua satuan yang dijual kasir. Untuk Rokok Surya:
-                    batang Rp2.500, bungkus Rp27.000, slop Rp260.000, dan harga
-                    beli slop Rp250.000.
+                    {businessProfile.priceSectionDescription}
                   </p>
                 </div>
                 <Badge tone={createUnitRowsInvalid ? "warning" : "success"}>
@@ -1276,10 +1315,10 @@ export function CatalogPage() {
                 </Badge>
               </div>
               <div className="flex flex-wrap items-center gap-2 rounded-xl bg-brand-50 p-3 text-xs text-brand-900 [&_span]:rounded-full [&_span]:border [&_span]:border-[#dfe7e2] [&_span]:bg-white [&_span]:px-2 [&_span]:py-1 [&_strong]:mr-1">
-                <strong>Contoh rokok</strong>
-                <span>Batang = isi 1</span>
-                <span>Bungkus = isi 12 batang</span>
-                <span>Slop = isi 120 batang</span>
+                <strong>{businessProfile.unitExampleTitle}</strong>
+                {businessProfile.unitExamples.map((example) => (
+                  <span key={example}>{example}</span>
+                ))}
               </div>
               {createUnitRows.map((row, index) => {
                 const currentUnit =
@@ -1363,8 +1402,8 @@ export function CatalogPage() {
                         }
                         placeholder={
                           index === 0
-                            ? "Barcode batang / eceran"
-                            : "Barcode bungkus, slop, atau bal"
+                            ? "Barcode satuan terkecil"
+                            : businessProfile.unitBarcodePlaceholder
                         }
                       />
                       <Input
@@ -1382,7 +1421,7 @@ export function CatalogPage() {
                         hint={
                           index === 0
                             ? "Satuan dasar selalu bernilai 1."
-                            : "Contoh: bungkus 12 batang, slop 120 batang."
+                            : businessProfile.conversionHint
                         }
                       />
                       <Input
@@ -1546,16 +1585,117 @@ export function CatalogPage() {
                 />
               </>
             )}
-          <label className="flex items-center gap-2.5 text-xs font-semibold text-slate-700 [&_input]:h-4 [&_input]:w-4 [&_input]:accent-brand-700">
-            <input
-              type="checkbox"
-              checked={product.track_batch}
-              onChange={(e) =>
-                setProduct({ ...product, track_batch: e.target.checked })
-              }
-            />
-            <span>Lacak batch & kedaluwarsa</span>
-          </label>
+          {store.business_type === "furniture" &&
+            product.product_kind === "material" && (
+              <>
+                <Input
+                  label="Bahan utama"
+                  value={product.metadata.material}
+                  placeholder="Contoh: kayu jati, MDF, rotan, atau besi"
+                  onChange={(e) =>
+                    setProduct({
+                      ...product,
+                      metadata: { ...product.metadata, material: e.target.value },
+                    })
+                  }
+                />
+                <Input
+                  label="Ukuran / dimensi"
+                  value={product.metadata.dimensions}
+                  placeholder="Contoh: 120 x 60 x 75 cm"
+                  onChange={(e) =>
+                    setProduct({
+                      ...product,
+                      metadata: { ...product.metadata, dimensions: e.target.value },
+                    })
+                  }
+                />
+                <Input
+                  label="Warna / finishing"
+                  value={product.metadata.color}
+                  placeholder="Contoh: natural doff"
+                  onChange={(e) =>
+                    setProduct({
+                      ...product,
+                      metadata: { ...product.metadata, color: e.target.value },
+                    })
+                  }
+                />
+              </>
+            )}
+          {store.business_type === "workshop_spareparts" &&
+            product.product_kind !== "service" && (
+              <>
+                <Input
+                  label="Nomor part"
+                  value={product.metadata.part_number}
+                  placeholder="Contoh: 90919-01210"
+                  onChange={(e) =>
+                    setProduct({
+                      ...product,
+                      metadata: { ...product.metadata, part_number: e.target.value },
+                    })
+                  }
+                />
+                <Input
+                  label="Kompatibilitas kendaraan"
+                  value={product.metadata.vehicle_compatibility}
+                  placeholder="Contoh: Avanza 2015–2021 atau motor 110–125 cc"
+                  onChange={(e) =>
+                    setProduct({
+                      ...product,
+                      metadata: {
+                        ...product.metadata,
+                        vehicle_compatibility: e.target.value,
+                      },
+                    })
+                  }
+                />
+                <Input
+                  label="Garansi"
+                  value={product.metadata.warranty}
+                  placeholder="Contoh: 6 bulan"
+                  onChange={(e) =>
+                    setProduct({
+                      ...product,
+                      metadata: { ...product.metadata, warranty: e.target.value },
+                    })
+                  }
+                />
+              </>
+            )}
+          {store.business_type === "workshop_spareparts" &&
+            product.product_kind === "service" && (
+              <Input
+                label="Perkiraan durasi layanan (menit)"
+                type="number"
+                min="0"
+                step="1"
+                value={product.metadata.service_duration_minutes}
+                onChange={(e) =>
+                  setProduct({
+                    ...product,
+                    metadata: {
+                      ...product.metadata,
+                      service_duration_minutes: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            )}
+          <div className="grid gap-1.5 rounded-xl border border-[#dfe7e2] bg-slate-50 p-3">
+            <label className="flex items-center gap-2.5 text-xs font-semibold text-slate-700 [&_input]:h-4 [&_input]:w-4 [&_input]:accent-brand-700">
+              <input
+                type="checkbox"
+                checked={product.track_batch}
+                onChange={(e) =>
+                  setProduct({ ...product, track_batch: e.target.checked })
+                }
+              />
+              <span>Lacak batch & kedaluwarsa</span>
+            </label>
+            <small className="text-[11px] leading-5 text-slate-500">{businessProfile.batchHint}</small>
+          </div>
         </div>
         {!selected && product.product_kind === "menu" && (
           <section className="col-span-full mt-4 grid gap-3 border-t border-[#dfe7e2] pt-4 [&_h3]:m-0 [&_p]:m-0">
@@ -1880,108 +2020,283 @@ export function CatalogPage() {
       </Modal>
       <Modal
         open={Boolean(detail)}
-        title={detail?.product.name || "Detail produk"}
+        title="Detail produk"
         onClose={() => setDetail(null)}
+        wide
+        className="md:w-[min(940px,calc(100vw-72px))] md:max-h-[calc(100dvh-48px)] md:rounded-[18px]"
       >
-        <div className="mb-4 flex items-center gap-3 rounded-xl bg-brand-50 p-3 [&>span]:grid [&>span]:h-12 [&>span]:w-12 [&>span]:place-items-center [&>span]:rounded-lg [&>span]:bg-brand-100 [&>span]:font-extrabold [&>span]:text-brand-700 [&_h3]:m-0 [&_h3]:text-sm [&_p]:mt-1 [&_p]:flex [&_p]:items-center [&_p]:gap-1 [&_p]:text-[10px] [&_p]:text-slate-500 [&_svg]:h-3.5 [&_svg]:w-3.5">
-          <span>{detail?.product.name.slice(0, 2).toUpperCase()}</span>
-          <div>
-            <h3>{detail?.product.name}</h3>
-            <p>
-              <Barcode /> {detail?.product.barcode || detail?.product.sku}
-            </p>
-          </div>
-        </div>
-        <h3 className="text-sm font-bold text-slate-900">Satuan dan harga jual</h3>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#dfe7e2] bg-brand-50 p-4 [&_strong]:text-xl [&_strong]:text-brand-900">
-          <span>
-            Harga pokok otomatis
-            <small>
-              {detail?.product.hpp_method === "recipe"
-                ? "Berdasarkan resep"
-                : "Rata-rata harga barang yang diterima dari pemasok"}
-            </small>
-          </span>
-          <strong>{rupiah(detail?.product.hpp_per_base_milli || 0)}</strong>
-        </div>
-        {detail?.units.map((item) => (
-          <div
-            className="flex items-start justify-between gap-3 border-b border-[#dfe7e2] py-2.5 text-xs max-sm:flex-col"
-            key={item.id}
-          >
-            <div>
-              <strong>{item.unit_name}</strong>
-              <small>
-                Isi {quantity(item.conversion_factor_milli)} satuan terkecil{item.barcode ? ` · Barcode ${item.barcode}` : ""}
-              </small>
-            </div>
-            <div className="flex flex-col items-end text-right max-sm:items-start max-sm:text-left">
-              <strong>
-                {rupiah(item.sale_price_general || item.sale_price)}
-              </strong>
-              <small>
-                Reseller{" "}
-                {rupiah(
-                  item.sale_price_reseller ||
-                    item.sale_price_general ||
-                    item.sale_price,
-                )}{" "}
-                · Agen{" "}
-                {rupiah(
-                  item.sale_price_agent ||
-                    item.sale_price_reseller ||
-                    item.sale_price_general ||
-                    item.sale_price,
-                )}
-              </small>
-            </div>
-            {can("product.manage") && (
-              <div className="flex flex-wrap items-center justify-end gap-1.5">
-                <Button variant="ghost" onClick={() => editProductUnit(item)}>
-                  <Pencil /> Edit
-                </Button>
-                {user?.role === "owner" && (
-                  <Button
-                    variant="ghost"
-                    onClick={() => void deleteProductUnit(item)}
-                  >
-                    <Trash2 /> Hapus
+        {detail && (
+          <div className="grid gap-5">
+            <section className="relative overflow-hidden rounded-2xl border border-brand-100 bg-gradient-to-br from-brand-50 via-white to-emerald-50 p-4 sm:p-5">
+              <div className="absolute -right-12 -top-12 h-36 w-36 rounded-full bg-brand-100/50 blur-2xl" />
+              <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex min-w-0 items-start gap-3.5">
+                  <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-brand-700 text-base font-extrabold text-white shadow-[0_10px_24px_rgba(11,107,71,0.22)]">
+                    {detail.product.name.slice(0, 2).toUpperCase()}
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="info">
+                        {displayLabel(detail.product.product_kind)}
+                      </Badge>
+                      <Badge
+                        tone={
+                          detail.product.status === "active"
+                            ? "success"
+                            : "neutral"
+                        }
+                      >
+                        {displayLabel(detail.product.status)}
+                      </Badge>
+                    </div>
+                    <h3 className="m-0 mt-2 text-xl font-semibold tracking-[-.025em] text-slate-950 sm:text-2xl">
+                      {detail.product.name}
+                    </h3>
+                    <p className="m-0 mt-1 text-xs text-slate-500">
+                      {detail.product.brand || "Tanpa merek"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid min-w-0 gap-2 rounded-xl border border-white/80 bg-white/80 p-3 text-[10px] text-slate-500 shadow-sm backdrop-blur sm:min-w-[230px]">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>SKU</span>
+                    <code className="max-w-[150px] truncate rounded-md bg-slate-100 px-2 py-1 font-bold text-slate-700">
+                      {detail.product.sku}
+                    </code>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Barcode utama</span>
+                    <code className="max-w-[150px] truncate font-bold text-slate-700">
+                      {detail.product.barcode || "Belum diatur"}
+                    </code>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <article className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <span className="text-[10px] font-semibold text-slate-500">
+                  Harga pokok
+                </span>
+                <strong className="mt-1.5 block truncate text-base text-slate-950">
+                  {rupiah(detail.product.hpp_per_base_milli || 0)}
+                </strong>
+                <small className="mt-1 block text-[9px] leading-4 text-slate-500">
+                  {detail.product.hpp_method === "recipe"
+                    ? "Dihitung dari komposisi"
+                    : "Rata-rata pembelian"}
+                </small>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <span className="text-[10px] font-semibold text-slate-500">
+                  Stok minimum
+                </span>
+                <strong className="mt-1.5 block text-base text-slate-950">
+                  {quantity(detail.product.minimum_stock_milli)}
+                </strong>
+                <small className="mt-1 block text-[9px] leading-4 text-slate-500">
+                  Dalam satuan terkecil
+                </small>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <span className="text-[10px] font-semibold text-slate-500">
+                  Satuan jual
+                </span>
+                <strong className="mt-1.5 block text-base text-slate-950">
+                  {detail.units.length}
+                </strong>
+                <small className="mt-1 block text-[9px] leading-4 text-slate-500">
+                  Pilihan harga transaksi
+                </small>
+              </article>
+              <article className="rounded-2xl border border-slate-200 bg-white p-3.5">
+                <span className="text-[10px] font-semibold text-slate-500">
+                  Pelacakan
+                </span>
+                <strong className="mt-1.5 block text-sm text-slate-950">
+                  {detail.product.track_batch ? "Batch aktif" : "Stok biasa"}
+                </strong>
+                <small className="mt-1 block text-[9px] leading-4 text-slate-500">
+                  {detail.product.track_batch
+                    ? "Batch dan kedaluwarsa"
+                    : "Tanpa batch"}
+                </small>
+              </article>
+            </section>
+
+            {detail.product.product_kind === "menu" && (
+              <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50/70 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white text-amber-700 shadow-sm">
+                    <Calculator className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <strong className="block text-sm text-slate-900">
+                      Produk racikan
+                    </strong>
+                    <small className="mt-1 block text-[10px] leading-4 text-slate-600">
+                      {detail.recipe?.items?.length || 0} bahan digunakan dalam
+                      komposisi produk ini.
+                    </small>
+                  </div>
+                </div>
+                {can("product.manage") && (
+                  <Button variant="secondary" onClick={() => void openRecipe()}>
+                    <Calculator /> Atur komposisi
                   </Button>
                 )}
+              </section>
+            )}
+
+            <section>
+              <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <h3 className="m-0 text-sm font-bold text-slate-900">
+                    Satuan dan harga jual
+                  </h3>
+                  <p className="m-0 mt-1 text-[10px] leading-4 text-slate-500">
+                    Harga umum, reseller, dan agen ditampilkan untuk setiap
+                    satuan produk.
+                  </p>
+                </div>
+                <Badge tone="info">{detail.units.length} satuan</Badge>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {detail.units.map((item) => (
+                  <article
+                    className="flex min-w-0 flex-col rounded-2xl border border-[#dfe7e2] bg-white p-4 shadow-[0_3px_10px_rgba(20,45,32,0.035)]"
+                    key={item.id}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-50 text-brand-700">
+                          <Ruler className="h-4 w-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <strong className="truncate text-sm text-slate-950">
+                              {item.unit_name}
+                            </strong>
+                            {item.is_default_sale && (
+                              <Badge tone="success">Utama</Badge>
+                            )}
+                          </div>
+                          <small className="mt-1 block text-[10px] leading-4 text-slate-500">
+                            Isi {quantity(item.conversion_factor_milli)} satuan
+                            terkecil
+                          </small>
+                        </div>
+                      </div>
+                      <code className="max-w-[110px] truncate rounded-lg bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">
+                        {item.barcode || "Tanpa barcode"}
+                      </code>
+                    </div>
+
+                    <div className="mt-4 grid grid-cols-3 gap-2">
+                      <div className="rounded-xl bg-brand-50 p-2.5">
+                        <small className="block text-[8px] font-bold uppercase tracking-wide text-brand-700">
+                          Umum
+                        </small>
+                        <strong className="mt-1 block truncate text-[11px] text-brand-900">
+                          {rupiah(item.sale_price_general || item.sale_price)}
+                        </strong>
+                      </div>
+                      <div className="rounded-xl bg-blue-50 p-2.5">
+                        <small className="block text-[8px] font-bold uppercase tracking-wide text-blue-700">
+                          Reseller
+                        </small>
+                        <strong className="mt-1 block truncate text-[11px] text-blue-900">
+                          {rupiah(
+                            item.sale_price_reseller ||
+                              item.sale_price_general ||
+                              item.sale_price,
+                          )}
+                        </strong>
+                      </div>
+                      <div className="rounded-xl bg-amber-50 p-2.5">
+                        <small className="block text-[8px] font-bold uppercase tracking-wide text-amber-700">
+                          Agen
+                        </small>
+                        <strong className="mt-1 block truncate text-[11px] text-amber-900">
+                          {rupiah(
+                            item.sale_price_agent ||
+                              item.sale_price_reseller ||
+                              item.sale_price_general ||
+                              item.sale_price,
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">
+                      <span className="text-[10px] text-slate-500">
+                        Harga beli {rupiah(item.purchase_price || 0)}
+                      </span>
+                      {can("product.manage") && (
+                        <div className="flex items-center gap-1">
+                          <Button
+                            className="px-2.5"
+                            variant="ghost"
+                            onClick={() => editProductUnit(item)}
+                          >
+                            <Pencil /> Edit
+                          </Button>
+                          {user?.role === "owner" && (
+                            <Button
+                              className="px-2.5 text-red-700 hover:bg-red-50"
+                              variant="ghost"
+                              onClick={() => void deleteProductUnit(item)}
+                            >
+                              <Trash2 /> Hapus
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+
+                {!detail.units.length && (
+                  <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-slate-50">
+                    <EmptyState
+                      title="Belum ada satuan jual"
+                      description="Tambahkan satuan dan harga agar produk dapat digunakan pada kasir."
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {can("product.manage") && (
+              <div className="sticky bottom-0 z-10 -mx-6 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white/95 px-6 py-4 shadow-[0_-10px_24px_rgba(16,45,31,0.07)] backdrop-blur max-sm:-mx-4 max-sm:flex-col-reverse max-sm:px-4 [&_button]:max-sm:w-full">
+                {user?.role === "owner" && (
+                  <Button
+                    variant="danger"
+                    loading={saving}
+                    onClick={() => void deleteProduct()}
+                  >
+                    <Trash2 /> Hapus produk
+                  </Button>
+                )}
+                <Button variant="secondary" onClick={openEditProduct}>
+                  <Pencil /> Edit produk
+                </Button>
+                <Button
+                  onClick={() => {
+                    setSelected(detail.product);
+                    setSelectedProductUnit(null);
+                    setUnitForm(blankUnitForm());
+                    setDetail(null);
+                    setModal("productUnit");
+                  }}
+                >
+                  <Plus /> Tambah satuan
+                </Button>
               </div>
             )}
-          </div>
-        ))}
-        {can("product.manage") && (
-          <div className="mt-5 flex flex-wrap justify-end gap-2 border-t border-[#dfe7e2] bg-white pt-4 max-sm:flex-col-reverse [&_button]:max-sm:w-full">
-            {user?.role === "owner" && (
-              <Button
-                variant="danger"
-                loading={saving}
-                onClick={() => void deleteProduct()}
-              >
-                <Trash2 /> Hapus produk
-              </Button>
-            )}
-            {detail?.product.product_kind === "menu" && (
-              <Button variant="secondary" onClick={() => void openRecipe()}>
-                <Calculator /> Atur komposisi dan harga pokok
-              </Button>
-            )}
-            <Button variant="secondary" onClick={openEditProduct}>
-              <Pencil /> Edit produk
-            </Button>
-            <Button
-              onClick={() => {
-                setSelected(detail!.product);
-                setSelectedProductUnit(null);
-                setUnitForm(blankUnitForm());
-                setDetail(null);
-                setModal("productUnit");
-              }}
-            >
-              <Plus /> Tambah satuan
-            </Button>
           </div>
         )}
       </Modal>

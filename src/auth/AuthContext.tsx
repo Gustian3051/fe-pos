@@ -17,6 +17,7 @@ interface LoginInput {
 
 interface RegisterInput extends LoginInput {
   store_name: string;
+  business_type: string;
   full_name: string;
 }
 
@@ -81,11 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(session.user);
   };
 
-  const register = async ({ store_name, full_name, ...input }: RegisterInput) => {
+  const register = async ({ store_name, business_type, full_name, ...input }: RegisterInput) => {
     await api(
       "/auth/register",
       json("POST", {
         store_name: store_name.trim(),
+        business_type,
         username: input.username.trim(),
         full_name: full_name.trim(),
         password: input.password,

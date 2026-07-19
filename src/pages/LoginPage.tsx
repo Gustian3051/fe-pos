@@ -6,11 +6,12 @@ import {
   Eye,
   EyeOff,
   LockKeyhole,
-  Store,
   WifiOff,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
+import kitaPosLogo from "../assets/kita-pos-logo.png";
 import { ApiError } from "../lib/api";
+import { businessTypeOptions, getBusinessProfile } from "../lib/business";
 
 export function LoginPage() {
   const { login, register } = useAuth();
@@ -20,6 +21,7 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [form, setForm] = useState({
     store_name: "",
+    business_type: "grocery",
     username: "",
     full_name: "",
     password: "",
@@ -33,6 +35,10 @@ export function LoginPage() {
       if (mode === "register") {
         if (!form.store_name.trim()) {
           setError("Nama toko wajib diisi.");
+          return;
+        }
+        if (!form.business_type) {
+          setError("Jenis usaha wajib dipilih.");
           return;
         }
         await register(form);
@@ -62,14 +68,18 @@ export function LoginPage() {
         <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full border border-white/10 shadow-[0_0_0_70px_rgba(255,255,255,.025),0_0_0_140px_rgba(255,255,255,.018)]" />
         <div className="absolute -bottom-44 -left-32 h-96 w-96 rounded-full bg-emerald-300/10 blur-3xl" />
         <div className="relative z-10 flex items-center gap-3 text-xl font-extrabold">
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-white text-brand-700 shadow-lg">
-            <Store size={23} />
+          <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-white p-1.5 shadow-lg ring-1 ring-white/10">
+            <img
+              src={kitaPosLogo}
+              alt="Logo Kita POS"
+              className="h-full w-full object-contain"
+            />
           </span>
-          WarungKasir
+          Kita POS
         </div>
         <div className="relative z-10 max-w-2xl">
           <p className="mb-4 text-xs font-extrabold tracking-[.18em] text-emerald-200">
-            PENGELOLAAN TOKO DALAM SATU TEMPAT
+            PENGELOLAAN USAHA DALAM SATU TEMPAT
           </p>
           <h1 className="text-5xl font-extrabold leading-[1.06] tracking-[-.045em] xl:text-7xl">
             Kasir cepat.
@@ -80,7 +90,7 @@ export function LoginPage() {
           </h1>
           <p className="mt-7 max-w-xl text-base leading-8 text-emerald-50/80">
             Kelola penjualan, persediaan, pembelian, utang-piutang, dan laporan
-            toko dengan alur yang sederhana.
+            usaha dengan alur yang sederhana untuk berbagai jenis bisnis.
           </p>
         </div>
         <div className="relative z-10 flex flex-wrap gap-3 text-xs font-semibold text-emerald-50/90">
@@ -91,32 +101,36 @@ export function LoginPage() {
             <WifiOff size={16} /> Tetap aman saat koneksi terganggu
           </span>
           <span className="flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2.5">
-            <Boxes size={16} /> Satuan barang lengkap
+            <Boxes size={16} /> Cocok untuk banyak jenis usaha
           </span>
         </div>
         <small className="relative z-10 text-xs text-emerald-100/60">
-          © 2026 WarungKasir · Dibangun untuk toko Indonesia
+          © 2026 Kita POS · Dibangun untuk toko dan usaha di Indonesia
         </small>
       </section>
 
       <section className="flex min-h-screen items-center justify-center bg-gradient-to-br from-white to-brand-50/50 p-6 sm:p-10">
         <form className="w-full max-w-md" onSubmit={submit}>
           <div className="mb-10 flex items-center gap-3 text-xl font-extrabold text-brand-700 lg:hidden">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-brand-700 text-white">
-              <Store size={22} />
+            <span className="grid h-12 w-12 place-items-center overflow-hidden rounded-xl bg-white p-1.5 shadow-md ring-1 ring-brand-100">
+              <img
+                src={kitaPosLogo}
+                alt="Logo Kita POS"
+                className="h-full w-full object-contain"
+              />
             </span>
-            WarungKasir
+            Kita POS
           </div>
           <p className="mb-3 text-xs font-extrabold tracking-[.16em] text-brand-600">
-            {mode === "login" ? "SELAMAT DATANG KEMBALI" : "DAFTARKAN TOKO"}
+            {mode === "login" ? "SELAMAT DATANG KEMBALI" : "DAFTARKAN USAHA"}
           </p>
           <h2 className="text-3xl font-extrabold tracking-[-.035em] text-slate-900">
-            {mode === "login" ? "Masuk ke akun Anda" : "Buat toko dan akun pemilik"}
+            {mode === "login" ? "Masuk ke akun Anda" : "Buat usaha dan akun pemilik"}
           </h2>
           <p className="mb-8 mt-3 text-sm leading-6 text-slate-500">
             {mode === "login"
-              ? "Masukkan nama pengguna dan kata sandi untuk melanjutkan."
-              : "Masukkan nama toko dan data pemilik. Sistem akan membuat ruang data toko baru tanpa data contoh."}
+              ? "Masukkan nama pengguna dan kata sandi untuk melanjutkan ke Kita POS."
+              : "Pilih jenis usaha agar kategori, satuan, dan panduan input produk langsung menyesuaikan kebutuhan usaha Anda."}
           </p>
 
           {error && (
@@ -129,7 +143,7 @@ export function LoginPage() {
             <>
               <label className="mb-5 block">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
-                  Nama toko
+                  Nama usaha / toko
                 </span>
                 <input
                   className={fieldClass}
@@ -146,6 +160,28 @@ export function LoginPage() {
               </label>
               <label className="mb-5 block">
                 <span className="mb-2 block text-sm font-bold text-slate-700">
+                  Jenis usaha
+                </span>
+                <select
+                  className={fieldClass}
+                  value={form.business_type}
+                  onChange={(event) =>
+                    setForm({ ...form, business_type: event.target.value })
+                  }
+                  required
+                >
+                  {businessTypeOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+                <small className="mt-2 block text-xs leading-5 text-slate-500">
+                  {getBusinessProfile(form.business_type).description} Sistem hanya menyiapkan kategori dan satuan awal; produk serta transaksi tetap kosong.
+                </small>
+              </label>
+              <label className="mb-5 block">
+                <span className="mb-2 block text-sm font-bold text-slate-700">
                   Nama lengkap pemilik
                 </span>
                 <input
@@ -154,7 +190,7 @@ export function LoginPage() {
                   onChange={(event) =>
                     setForm({ ...form, full_name: event.target.value })
                   }
-                  placeholder="Nama pemilik toko"
+                  placeholder="Nama pemilik usaha"
                   autoComplete="name"
                   required
                   minLength={2}
@@ -226,8 +262,8 @@ export function LoginPage() {
             {loading
               ? "Mohon tunggu..."
               : mode === "login"
-                ? "Masuk ke WarungKasir"
-                : "Daftarkan toko & masuk"}
+                ? "Masuk ke Kita POS"
+                : "Daftarkan usaha & masuk"}
             {!loading && <ArrowRight size={18} />}
           </button>
           <button
@@ -239,7 +275,7 @@ export function LoginPage() {
             }}
           >
             {mode === "login"
-              ? "Belum memiliki akun? Daftarkan toko"
+              ? "Belum memiliki akun? Daftarkan usaha"
               : "Sudah memiliki akun? Kembali ke halaman masuk"}
           </button>
         </form>

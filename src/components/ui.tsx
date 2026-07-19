@@ -50,7 +50,7 @@ export function PageHeader({
   return (
     <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
       <div className="min-w-0">
-        <h1 className="m-0 text-[27px] font-semibold tracking-[-.035em] text-slate-950">
+        <h1 className="m-0 text-2xl font-semibold tracking-[-.035em] text-slate-950 sm:text-[27px]">
           {title}
         </h1>
         {description && (
@@ -457,7 +457,7 @@ export function Tabs({
 }) {
   return (
     <div
-      className="mb-4 flex gap-1 overflow-x-auto border-b border-slate-200"
+      className="mb-5 grid w-full grid-cols-[repeat(auto-fit,minmax(128px,1fr))] gap-1.5 rounded-xl border border-slate-200 bg-white p-1.5 shadow-[0_2px_8px_rgba(20,45,32,0.035)]"
       role="tablist"
     >
       {items.map((item) => {
@@ -469,10 +469,10 @@ export function Tabs({
             role="tab"
             aria-selected={active}
             className={classNames(
-              "-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-bold transition",
+              "inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-center text-xs font-bold leading-4 transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-700/15 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
               active
-                ? "border-brand-700 text-brand-700"
-                : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-800",
+                ? "border-brand-700 bg-brand-700 text-white shadow-[0_4px_12px_rgba(11,107,71,0.2)]"
+                : "border-transparent bg-transparent text-slate-500 hover:border-slate-200 hover:bg-slate-50 hover:text-slate-800",
             )}
             onClick={() => onChange(item.value)}
           >

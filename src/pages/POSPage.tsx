@@ -1,6 +1,7 @@
 import {
   Banknote,
   Barcode,
+  ChevronUp,
   CreditCard,
   Minus,
   Plus,
@@ -10,10 +11,11 @@ import {
   Trash2,
   UserRound,
   WalletCards,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, apiPage, json, newUUID, requireActiveShiftID } from "../lib/api";
-import { asArray, quantity, rupiah } from "../lib/format";
+import { asArray, classNames, quantity, rupiah } from "../lib/format";
 import { useDebouncedValue } from "../lib/hooks";
 import type { Product, ProductUnit } from "../types/api";
 import { Badge, Button, EmptyState, Input, Modal, Textarea, useToast } from "../components/ui";
@@ -90,6 +92,7 @@ export function POSPage() {
   const [payOpen, setPayOpen] = useState(false);
   const [receipt, setReceipt] = useState<any>(null);
   const [unitPicker, setUnitPicker] = useState<UnitPickerState | null>(null);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const { show, node: toast } = useToast();
 
   const search = useCallback(async () => {
@@ -202,6 +205,10 @@ export function POSPage() {
     [cart],
   );
   const total = Math.max(0, subtotal - transactionDiscount);
+  const cartQuantity = cart.reduce(
+    (sum, item) => sum + item.quantityMilli / 1000,
+    0,
+  );
   const change = Math.max(0, paidAmount - total);
   useEffect(() => {
     if (payOpen) setPaidAmount(total);
@@ -244,6 +251,7 @@ export function POSPage() {
       setTransactionDiscount(0);
       setNotes("");
       setPayOpen(false);
+      setMobileCartOpen(false);
       show("Transaksi berhasil disimpan.");
     } catch (error) {
       show(error instanceof Error ? error.message : "Transaksi gagal", true);
@@ -253,132 +261,386 @@ export function POSPage() {
   };
 
   return (
-    <div className="-m-8 grid h-[calc(100vh-70px)] grid-cols-[minmax(0,1fr)_380px] overflow-hidden max-lg:-m-5 max-lg:flex max-lg:h-auto max-lg:flex-col max-lg:overflow-visible">
+    <div className="-m-4 min-h-[calc(100dvh-64px)] bg-[#f4f7f5] sm:-m-5 xl:-m-8 xl:grid xl:h-[calc(100dvh-70px)] xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_360px] xl:overflow-hidden 2xl:grid-cols-[minmax(0,1fr)_400px]">
       {toast}
-      <section className="overflow-auto p-7 max-lg:overflow-visible max-lg:p-5">
-        <div className="flex items-center justify-between gap-4 max-md:flex-col max-md:items-start [&_h1]:m-0 [&_h1]:text-2xl [&_h1]:font-bold">
-          <div>
-            <p className="mb-3 text-[11px] font-extrabold tracking-[.16em] text-brand-700">TRANSAKSI PENJUALAN</p>
-            <h1>Transaksi baru</h1>
+
+      <section className="min-w-0 p-4 pb-28 sm:p-5 xl:overflow-y-auto xl:p-5 xl:pb-5 2xl:p-7 2xl:pb-7">
+        <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between [@media(max-height:760px)]:mb-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-brand-700 text-white shadow-[0_8px_20px_rgba(11,107,71,0.2)]">
+              <ShoppingCart className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <p className="m-0 text-[10px] font-extrabold tracking-[.16em] text-brand-700">
+                TRANSAKSI PENJUALAN
+              </p>
+              <h1 className="m-0 mt-1 truncate text-2xl font-semibold tracking-[-.03em] text-slate-950 sm:text-[28px]">
+                Kasir
+              </h1>
+              <p className="m-0 mt-1 text-xs text-slate-500">
+                Cari produk, pilih satuan, lalu selesaikan pembayaran.
+              </p>
+            </div>
           </div>
-          <Badge tone="success">Terhubung</Badge>
+          <Badge tone="success">Sistem terhubung</Badge>
         </div>
-        <label className="sticky top-0 z-10 flex min-h-12 items-center gap-3 rounded-xl border border-[#cedbd3] bg-white px-4 shadow-sm focus-within:border-brand-700 [&_input]:min-w-0 [&_input]:flex-1 [&_input]:border-0 [&_input]:outline-none [&_svg]:text-brand-700 [&_span]:flex [&_span]:items-center [&_span]:gap-1 [&_span]:rounded-md [&_span]:bg-slate-100 [&_span]:px-2 [&_span]:py-1 [&_span]:text-[9px] [&_span]:text-slate-500">
-          <Search />
-          <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama, kode barang, atau pindai barcode satuan..." />
-          <span><Barcode /> Pindai</span>
-        </label>
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]">
+
+        <div className="sticky top-16 z-20 -mx-1 mb-4 bg-[#f4f7f5]/95 px-1 py-2 backdrop-blur-md xl:top-0">
+          <label className="flex min-h-12 items-center gap-3 rounded-2xl border border-[#cedbd3] bg-white px-4 shadow-[0_8px_24px_rgba(20,45,32,0.07)] transition focus-within:border-brand-700 focus-within:ring-4 focus-within:ring-brand-700/10">
+            <Search className="h-5 w-5 shrink-0 text-brand-700" />
+            <input
+              autoFocus
+              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Cari nama, SKU, atau pindai barcode..."
+            />
+            <span className="hidden items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[10px] font-bold text-slate-500 sm:flex">
+              <Barcode className="h-3.5 w-3.5" /> Pindai
+            </span>
+          </label>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="m-0 text-sm font-bold text-slate-900">Pilih produk</h2>
+            <p className="m-0 mt-1 text-[11px] text-slate-500">
+              {products.length} produk ditampilkan
+            </p>
+          </div>
+          {query && (
+            <button
+              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+              onClick={() => setQuery("")}
+            >
+              Hapus pencarian
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-[repeat(auto-fill,minmax(164px,1fr))] 2xl:grid-cols-[repeat(auto-fill,minmax(176px,1fr))]">
           {products.map((product) => (
-            <button key={product.id} className="relative flex min-h-[84px] items-center gap-3 rounded-xl border border-[#dfe7e2] bg-white p-3 text-left transition hover:-translate-y-px hover:border-brand-200 hover:shadow-lg" onClick={() => void addProduct(product)}>
-              <span className="grid h-14 w-12 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand-50 to-brand-100 text-xs font-extrabold text-brand-700">{product.name.slice(0, 2).toUpperCase()}</span>
-              <span>
-                <strong>{product.name}</strong>
-                <small>{product.brand || product.sku}</small>
-                <em>{product.barcode || product.sku}</em>
+            <button
+              key={product.id}
+              className="group relative flex min-h-[148px] min-w-0 flex-col overflow-hidden rounded-2xl border border-[#dfe7e2] bg-white p-3.5 text-left shadow-[0_3px_10px_rgba(20,45,32,0.035)] transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-[0_12px_28px_rgba(20,45,32,0.1)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-brand-700/15 [@media(max-height:760px)]:min-h-[136px]"
+              onClick={() => void addProduct(product)}
+            >
+              <span className="mb-3 grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-brand-50 to-brand-100 text-xs font-extrabold text-brand-700 transition group-hover:scale-105">
+                {product.name.slice(0, 2).toUpperCase()}
               </span>
-              <Plus className="absolute bottom-2 right-2 h-4 w-4 text-brand-300" />
+              <strong className="line-clamp-2 [overflow-wrap:anywhere] text-[13px] leading-5 text-slate-900">
+                {product.name}
+              </strong>
+              <small className="mt-1 truncate text-[10px] text-slate-500">
+                {product.brand || "Tanpa merek"}
+              </small>
+              <span className="mt-auto flex items-center justify-between gap-2 pt-3">
+                <code className="min-w-0 truncate rounded-md bg-slate-100 px-2 py-1 text-[9px] font-bold text-slate-600">
+                  {product.sku}
+                </code>
+                <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-brand-700 text-white shadow-sm">
+                  <Plus className="h-4 w-4" />
+                </span>
+              </span>
             </button>
           ))}
-          {products.length === 0 && <EmptyState title="Produk tidak ditemukan" description="Ubah kata pencarian atau tambahkan produk baru." />}
+          {products.length === 0 && (
+            <div className="col-span-full rounded-2xl border border-dashed border-slate-300 bg-white">
+              <EmptyState
+                title="Produk tidak ditemukan"
+                description="Ubah kata pencarian atau tambahkan produk baru melalui menu Produk."
+              />
+            </div>
+          )}
         </div>
       </section>
-      <aside className="flex min-h-0 flex-col border-l border-[#dfe7e2] bg-white max-lg:border-l-0 max-lg:border-t">
-        <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-4">
-          <div className="flex items-center gap-2 text-brand-700">
-            <ShoppingCart className="h-5 w-5" />
-            <span className="flex flex-col">
-              <strong className="text-sm text-slate-900">Keranjang</strong>
-              <small className="text-[10px] text-slate-500">{cart.length} jenis barang</small>
+
+      {mobileCartOpen && (
+        <button
+          className="fixed inset-0 z-40 border-0 bg-black/45 backdrop-blur-[2px] xl:hidden"
+          onClick={() => setMobileCartOpen(false)}
+          aria-label="Tutup keranjang"
+        />
+      )}
+
+      <aside
+        className={classNames(
+          "fixed inset-x-0 bottom-0 z-50 flex max-h-[88dvh] min-h-0 flex-col overflow-hidden rounded-t-[24px] border border-[#dfe7e2] bg-white shadow-[0_-22px_60px_rgba(10,35,22,0.2)] transition-transform duration-300 xl:static xl:h-full xl:max-h-none xl:translate-y-0 xl:rounded-none xl:border-y-0 xl:border-r-0 xl:border-l xl:shadow-none",
+          mobileCartOpen ? "translate-y-0" : "translate-y-full",
+        )}
+      >
+        <div className="mx-auto mt-2 h-1 w-12 rounded-full bg-slate-300 xl:hidden" />
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 xl:px-4 [@media(max-height:760px)]:py-2.5">
+          <div className="flex min-w-0 items-center gap-3 text-brand-700">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand-50">
+              <ShoppingCart className="h-5 w-5" />
+            </span>
+            <span className="flex min-w-0 flex-col">
+              <strong className="text-sm text-slate-900">Keranjang transaksi</strong>
+              <small className="text-[10px] text-slate-500">
+                {cart.length} jenis · {quantity(Math.round(cartQuantity * 1000))} barang
+              </small>
             </span>
           </div>
-          <button
-            className="rounded-lg px-2 py-1 text-[10px] font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
-            disabled={!cart.length}
-            onClick={() => setCart([])}
-          >
-            Kosongkan
-          </button>
-        </header>
-        <div className="mx-4 mt-3 space-y-2">
-          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-500 focus-within:border-brand-700 focus-within:ring-4 focus-within:ring-brand-700/10">
-            <Search className="h-4 w-4" />
-            <input
-              className="h-9 min-w-0 flex-1 border-0 bg-transparent text-xs text-slate-900 outline-none"
-              value={customerQuery}
-              onChange={(event) => setCustomerQuery(event.target.value)}
-              placeholder="Cari pelanggan..."
-            />
-          </label>
-          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-slate-500">
-            <UserRound className="h-4 w-4" />
-            <select
-              className="h-10 min-w-0 flex-1 border-0 bg-transparent text-xs text-slate-900 outline-none"
-              value={customerId}
-              onChange={(event) => setCustomerId(event.target.value)}
+          <div className="flex items-center gap-1">
+            <button
+              className="rounded-lg px-2 py-1.5 text-[10px] font-bold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-40"
+              disabled={!cart.length}
+              onClick={() => setCart([])}
             >
-              <option value="">Pelanggan umum</option>
-              {customers.map((item) => (
-                <option key={item.id} value={item.id}>{item.name}</option>
-              ))}
+              Kosongkan
+            </button>
+            <button
+              className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 xl:hidden"
+              onClick={() => setMobileCartOpen(false)}
+              aria-label="Tutup keranjang"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </header>
+
+        <div className="shrink-0 border-b border-slate-100 bg-slate-50/70 p-4 sm:p-5 xl:p-3.5 [@media(max-height:760px)]:p-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
+            <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500 focus-within:border-brand-700 focus-within:ring-4 focus-within:ring-brand-700/10">
+              <Search className="h-4 w-4" />
+              <input
+                className="h-10 min-w-0 flex-1 border-0 bg-transparent text-xs text-slate-900 outline-none [@media(max-height:760px)]:h-9"
+                value={customerQuery}
+                onChange={(event) => setCustomerQuery(event.target.value)}
+                placeholder="Cari pelanggan..."
+              />
+            </label>
+            <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500 focus-within:border-brand-700 focus-within:ring-4 focus-within:ring-brand-700/10">
+              <UserRound className="h-4 w-4" />
+              <select
+                className="h-10 min-w-0 flex-1 border-0 bg-transparent text-xs text-slate-900 outline-none [@media(max-height:760px)]:h-9"
+                value={customerId}
+                onChange={(event) => setCustomerId(event.target.value)}
+              >
+                <option value="">Pelanggan umum</option>
+                {customers.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-slate-500 focus-within:border-brand-700 focus-within:ring-4 focus-within:ring-brand-700/10">
+            <WalletCards className="h-4 w-4" />
+            <select
+              className="h-10 min-w-0 flex-1 border-0 bg-transparent text-xs text-slate-900 outline-none [@media(max-height:760px)]:h-9"
+              value={priceTier}
+              onChange={(e) => {
+                const nextTier = e.target.value as PriceTier;
+                setPriceTier(nextTier);
+                setCart((current) =>
+                  current.map((item) => ({ ...item, priceTier: nextTier })),
+                );
+              }}
+            >
+              <option value="general">Harga umum</option>
+              <option value="reseller">Harga reseller</option>
+              <option value="agent">Harga agen</option>
             </select>
           </label>
         </div>
-        <div className="mx-4 mt-3 flex items-center gap-2 rounded-lg border border-[#dfe7e2] px-2 text-slate-500 [&_select]:h-10 [&_select]:min-w-0 [&_select]:flex-1 [&_select]:border-0 [&_select]:bg-transparent [&_select]:text-xs [&_select]:outline-none [&_svg]:h-4 [&_svg]:w-4">
-          <WalletCards />
-          <select
-            value={priceTier}
-            onChange={(e) => {
-              const nextTier = e.target.value as PriceTier;
-              setPriceTier(nextTier);
-              setCart((current) => current.map((item) => ({ ...item, priceTier: nextTier })));
-            }}
-          >
-            <option value="general">Harga umum</option>
-            <option value="reseller">Harga reseller</option>
-            <option value="agent">Harga agen</option>
-          </select>
-        </div>
-        <div className="flex-1 overflow-auto px-4 py-2 [&_article]:border-b [&_article]:border-slate-100 [&_article]:py-3">
+
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto overscroll-contain p-4 sm:p-5 xl:p-4 [@media(max-height:760px)]:p-3">
           {cart.map((item) => (
-            <article key={`${item.unit.id}-${item.priceTier}`}>
-              <div className="flex items-start justify-between gap-3 [&_strong]:text-xs [&_small]:text-[10px] [&_small]:text-slate-500 [&_button]:border-0 [&_button]:bg-transparent [&_button]:text-slate-400">
-                <div>
-                  <strong>{item.product.name}</strong>
-                  <small>{item.unit.unit_name} · {tierLabel(item.priceTier)} · {rupiah(tierPrice(item.unit, item.priceTier))}</small>
+            <article
+              key={`${item.unit.id}-${item.priceTier}`}
+              className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-[0_2px_8px_rgba(20,45,32,0.035)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <strong className="block truncate text-xs text-slate-900">
+                    {item.product.name}
+                  </strong>
+                  <small className="mt-1 block text-[10px] leading-4 text-slate-500">
+                    {tierLabel(item.priceTier)} · {rupiah(tierPrice(item.unit, item.priceTier))}
+                  </small>
                 </div>
-                <button onClick={() => setCart(cart.filter((row) => !(row.unit.id === item.unit.id && row.priceTier === item.priceTier)))}><Trash2 /></button>
+                <button
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-700"
+                  onClick={() =>
+                    setCart(
+                      cart.filter(
+                        (row) =>
+                          !(
+                            row.unit.id === item.unit.id &&
+                            row.priceTier === item.priceTier
+                          ),
+                      ),
+                    )
+                  }
+                  aria-label={`Hapus ${item.product.name}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </div>
-              <label className="mt-3 grid gap-1.5 [&_span]:text-[8px] [&_span]:font-extrabold [&_span]:uppercase [&_span]:tracking-wider [&_span]:text-slate-500 [&_select]:min-h-9 [&_select]:rounded-lg [&_select]:border [&_select]:border-[#dfe7e2] [&_select]:bg-slate-50 [&_select]:px-2 [&_select]:text-[10px]">
-                <span>Satuan</span>
-                <select value={item.unit.id} onChange={(event) => changeCartUnit(item, event.target.value)}>
+
+              <label className="mt-3 grid gap-1.5">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider text-slate-500">
+                  Satuan jual
+                </span>
+                <select
+                  className="min-h-10 w-full rounded-xl border border-[#dfe7e2] bg-slate-50 px-3 text-[11px] text-slate-800 outline-none focus:border-brand-700 focus:ring-4 focus:ring-brand-700/10"
+                  value={item.unit.id}
+                  onChange={(event) => changeCartUnit(item, event.target.value)}
+                >
                   {item.units.map((unit) => (
                     <option key={unit.id} value={unit.id}>
-                      {unit.unit_name} — {rupiah(tierPrice(unit, item.priceTier))} {unit.conversion_factor_milli !== 1000 ? `(isi ${quantity(unit.conversion_factor_milli)})` : ""}
+                      {unit.unit_name} — {rupiah(tierPrice(unit, item.priceTier))}{" "}
+                      {unit.conversion_factor_milli !== 1000
+                        ? `(isi ${quantity(unit.conversion_factor_milli)})`
+                        : ""}
                     </option>
                   ))}
                 </select>
               </label>
-              <div className="mt-3 flex items-center justify-between gap-3 max-sm:flex-col max-sm:items-start">
-                <div className="flex overflow-hidden rounded-lg border border-[#dfe7e2] [&_button]:h-7 [&_button]:w-7 [&_button]:border-0 [&_button]:bg-slate-50 [&_span]:min-w-9 [&_span]:text-center [&_span]:text-[10px] [&_span]:leading-7">
-                  <button onClick={() => setCart(cart.map((row) => row.unit.id === item.unit.id && row.priceTier === item.priceTier ? { ...row, quantityMilli: Math.max(1000, row.quantityMilli - 1000) } : row))}><Minus /></button>
-                  <span>{quantity(item.quantityMilli)}</span>
-                  <button onClick={() => setCart(cart.map((row) => row.unit.id === item.unit.id && row.priceTier === item.priceTier ? { ...row, quantityMilli: row.quantityMilli + 1000 } : row))}><Plus /></button>
+
+              <div className="mt-3 flex items-center justify-between gap-3">
+                <div className="flex overflow-hidden rounded-xl border border-[#dfe7e2] bg-slate-50">
+                  <button
+                    className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-100"
+                    onClick={() =>
+                      setCart(
+                        cart.map((row) =>
+                          row.unit.id === item.unit.id &&
+                          row.priceTier === item.priceTier
+                            ? {
+                                ...row,
+                                quantityMilli: Math.max(
+                                  1000,
+                                  row.quantityMilli - 1000,
+                                ),
+                              }
+                            : row,
+                        ),
+                      )
+                    }
+                    aria-label="Kurangi jumlah"
+                  >
+                    <Minus className="h-4 w-4" />
+                  </button>
+                  <span className="min-w-11 px-2 text-center text-[11px] font-bold leading-9 text-slate-900">
+                    {quantity(item.quantityMilli)}
+                  </span>
+                  <button
+                    className="grid h-9 w-9 place-items-center text-slate-600 hover:bg-slate-100"
+                    onClick={() =>
+                      setCart(
+                        cart.map((row) =>
+                          row.unit.id === item.unit.id &&
+                          row.priceTier === item.priceTier
+                            ? {
+                                ...row,
+                                quantityMilli: row.quantityMilli + 1000,
+                              }
+                            : row,
+                        ),
+                      )
+                    }
+                    aria-label="Tambah jumlah"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
                 </div>
-                <strong>{rupiah((tierPrice(item.unit, item.priceTier) * item.quantityMilli) / 1000 - item.discount)}</strong>
+                <strong className="text-sm text-slate-950">
+                  {rupiah(
+                    (tierPrice(item.unit, item.priceTier) *
+                      item.quantityMilli) /
+                      1000 -
+                      item.discount,
+                  )}
+                </strong>
               </div>
             </article>
           ))}
-          {cart.length === 0 && <div className="flex h-full flex-col items-center justify-center text-slate-500 [&>svg]:h-10 [&>svg]:w-10 [&>svg]:rounded-full [&>svg]:bg-slate-100 [&>svg]:p-2 [&_strong]:mt-3 [&_strong]:text-xs [&_span]:text-[10px]"><ShoppingCart /><strong>Keranjang masih kosong</strong><span>Pilih produk untuk memulai transaksi.</span></div>}
+
+          {cart.length === 0 && (
+            <div className="flex h-full min-h-[150px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50/60 px-5 text-center text-slate-500 xl:min-h-0 [@media(max-height:760px)]:px-3">
+              <span className="grid h-12 w-12 place-items-center rounded-full bg-white text-brand-700 shadow-sm">
+                <ShoppingCart className="h-5 w-5" />
+              </span>
+              <strong className="mt-3 text-sm text-slate-700">
+                Keranjang masih kosong
+              </strong>
+              <span className="mt-1 text-[11px]">
+                Pilih produk untuk memulai transaksi.
+              </span>
+            </div>
+          )}
         </div>
-        <div className="border-t border-[#dfe7e2] bg-slate-50 p-4 [&>label]:my-2 [&>label]:flex [&>label]:items-center [&>label]:justify-between [&>label]:text-[10px] [&>div]:my-2 [&>div]:flex [&>div]:items-center [&>div]:justify-between [&>div]:text-[10px] [&_input]:w-24 [&_input]:rounded-md [&_input]:border [&_input]:border-[#dfe7e2] [&_input]:px-2 [&_input]:py-1 [&_input]:text-right">
-          <label>Diskon transaksi <input type="number" min="0" value={transactionDiscount} onChange={(e) => setTransactionDiscount(Number(e.target.value))} /></label>
-          <div><span>Subtotal</span><b>{rupiah(subtotal)}</b></div>
-          <div><span>Diskon</span><b>- {rupiah(transactionDiscount)}</b></div>
-          <div className="border-t border-dashed border-slate-300 pt-3 [&_strong]:text-xl [&_strong]:text-brand-700"><span>Total</span><strong>{rupiah(total)}</strong></div>
-          <Button disabled={!cart.length} onClick={() => setPayOpen(true)}><WalletCards /> Bayar sekarang</Button>
+
+        <div className="shrink-0 border-t border-[#dfe7e2] bg-white p-4 shadow-[0_-10px_28px_rgba(20,45,32,0.06)] sm:p-5 xl:p-4 [@media(max-height:760px)]:p-3">
+          <label className="mb-3 flex items-center justify-between gap-4 text-[11px] text-slate-600">
+            <span>Diskon transaksi</span>
+            <input
+              className="h-9 w-32 rounded-lg border border-[#dfe7e2] px-3 text-right text-xs font-semibold text-slate-900 outline-none focus:border-brand-700 focus:ring-4 focus:ring-brand-700/10"
+              type="number"
+              min="0"
+              value={transactionDiscount}
+              onChange={(e) => setTransactionDiscount(Number(e.target.value))}
+            />
+          </label>
+          <div className="space-y-2 text-[11px] text-slate-600">
+            <div className="flex items-center justify-between gap-3">
+              <span>Subtotal</span>
+              <b className="text-slate-900">{rupiah(subtotal)}</b>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>Diskon</span>
+              <b className="text-slate-900">- {rupiah(transactionDiscount)}</b>
+            </div>
+            <div className="mt-3 flex items-end justify-between gap-3 border-t border-dashed border-slate-300 pt-3">
+              <span className="font-bold text-slate-700">Total pembayaran</span>
+              <strong className="text-xl tracking-tight text-brand-700">
+                {rupiah(total)}
+              </strong>
+            </div>
+          </div>
+          <Button
+            className="mt-4 min-h-11 w-full text-sm [@media(max-height:760px)]:mt-3 [@media(max-height:760px)]:min-h-10"
+            disabled={!cart.length}
+            onClick={() => setPayOpen(true)}
+          >
+            <WalletCards /> Bayar sekarang
+          </Button>
         </div>
       </aside>
+
+      <div className="fixed inset-x-3 bottom-3 z-30 xl:hidden">
+        <button
+          className="flex min-h-16 w-full items-center justify-between gap-3 rounded-2xl border border-brand-800 bg-brand-700 px-4 py-3 text-left text-white shadow-[0_16px_36px_rgba(5,54,35,0.34)]"
+          onClick={() => setMobileCartOpen(true)}
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <span className="relative grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/15">
+              <ShoppingCart className="h-5 w-5" />
+              {cart.length > 0 && (
+                <b className="absolute -right-1.5 -top-1.5 grid min-h-5 min-w-5 place-items-center rounded-full bg-white px-1 text-[9px] text-brand-700">
+                  {cart.length}
+                </b>
+              )}
+            </span>
+            <span className="min-w-0">
+              <strong className="block text-xs">Lihat keranjang</strong>
+              <small className="block truncate text-[10px] text-emerald-100">
+                {cart.length
+                  ? `${quantity(Math.round(cartQuantity * 1000))} barang dipilih`
+                  : "Belum ada produk dipilih"}
+              </small>
+            </span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2">
+            <strong className="text-sm">{rupiah(total)}</strong>
+            <ChevronUp className="h-4 w-4" />
+          </span>
+        </button>
+      </div>
       <Modal open={Boolean(unitPicker)} title="Pilih satuan transaksi" onClose={() => setUnitPicker(null)}>
         <div className="mb-3 grid gap-1.5 rounded-xl border border-[#dfe7e2] bg-slate-50 p-3 [&_strong]:text-sm [&_span]:text-xs [&_span]:leading-6 [&_span]:text-slate-500">
           <strong>{unitPicker?.product.name}</strong>

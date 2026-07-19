@@ -14,7 +14,6 @@ import {
   ReceiptText,
   Settings,
   ShoppingBasket,
-  Store,
   Truck,
   Users,
   WalletCards,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { classNames, displayLabel } from "../lib/format";
+import kitaPosLogo from "../assets/kita-pos-logo.png";
 
 const navigation = [
   {
@@ -103,18 +103,22 @@ export function AppLayout() {
     <div className="min-h-screen lg:flex">
       <aside
         className={classNames(
-          "fixed inset-y-0 left-0 z-40 flex w-[260px] -translate-x-full flex-col bg-[#083d2c] px-4 py-5 text-[#dcece4] transition-transform lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 flex w-[236px] -translate-x-full flex-col bg-[#083d2c] px-3 py-4 text-[#dcece4] transition-transform lg:translate-x-0 2xl:w-[252px] [@media(max-height:760px)]:py-3",
           open && "translate-x-0",
         )}
       >
-        <div className="flex items-center gap-3 px-2 pb-6">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-white text-brand-700">
-            <Store />
+        <div className="flex items-center gap-3 px-2 pb-4 [@media(max-height:760px)]:pb-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-white p-1.5 shadow-lg ring-1 ring-white/10">
+            <img
+              src={kitaPosLogo}
+              alt="Logo Kita POS"
+              className="h-full w-full object-contain"
+            />
           </span>
-          <div className="flex flex-col">
-            <strong className="text-[17px] text-white">WarungKasir</strong>
-            <small className="text-[10px] text-emerald-100/70">
-              Kelola toko lebih mudah
+          <div className="flex min-w-0 flex-col">
+            <strong className="text-[17px] text-white">Kita POS</strong>
+            <small className="text-[10px] text-emerald-100/70 [@media(max-height:760px)]:hidden">
+              Kelola usaha lebih mudah
             </small>
           </div>
           <button
@@ -124,7 +128,7 @@ export function AppLayout() {
             <X />
           </button>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 overflow-auto">
+        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {navigation
             .filter((item) => !item.permission || can(item.permission))
             .map(({ to, label, icon: Icon }) => (
@@ -135,24 +139,24 @@ export function AppLayout() {
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   classNames(
-                    "flex items-center gap-3 rounded-[9px] px-3 py-2.5 text-[13px] font-bold text-emerald-100/75 hover:bg-white/10 hover:text-white",
+                    "flex min-h-10 items-center gap-3 rounded-[9px] px-3 py-2 text-[12.5px] font-bold text-emerald-100/75 hover:bg-white/10 hover:text-white [@media(max-height:760px)]:min-h-9 [@media(max-height:760px)]:py-1.5 [@media(max-height:760px)]:text-xs",
                     isActive &&
                       "bg-black text-brand-800 shadow-lg hover:bg-white hover:text-brand-800",
                   )
                 }
               >
-                <Icon size={19} />
+                <Icon size={18} className="shrink-0" />
                 <span>{label}</span>
               </NavLink>
             ))}
         </nav>
-        <div className="mt-auto flex items-center gap-3 border-t border-white/10 px-2 pt-4">
+        <div className="mt-auto flex shrink-0 items-center gap-3 border-t border-white/10 px-2 pt-3 [@media(max-height:760px)]:pt-2">
           <CircleDollarSign className="text-emerald-200" />
           <div className="flex flex-col">
             <strong className="text-[11px] text-emerald-50">
               Pencatatan Rupiah
             </strong>
-            <small className="text-[9px] text-emerald-100/65">
+            <small className="text-[9px] text-emerald-100/65 [@media(max-height:760px)]:hidden">
               Nilai tercatat dengan tepat
             </small>
           </div>
@@ -165,7 +169,7 @@ export function AppLayout() {
           aria-label="Tutup navigasi"
         />
       )}
-      <div className="min-w-0 flex-1 lg:ml-[260px]">
+      <div className="min-w-0 flex-1 lg:ml-[236px] 2xl:ml-[252px]">
         <header className="sticky top-0 z-30 flex h-[70px] items-center border-b border-[#dfe7e2] bg-white/95 px-8 backdrop-blur-md max-lg:h-16 max-lg:px-5">
           <button
             className="mr-3 border-0 bg-transparent lg:hidden"
@@ -174,7 +178,7 @@ export function AppLayout() {
             <Menu />
           </button>
           <div className="flex gap-2 text-xs text-slate-500">
-            <span className="max-sm:hidden">WarungKasir</span>
+            <span className="max-sm:hidden">Kita POS</span>
             <b className="text-slate-300 max-sm:hidden">/</b>
             <strong className="text-slate-800">
               {navigation.find((item) => item.to === location.pathname)

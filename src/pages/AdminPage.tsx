@@ -411,6 +411,8 @@ export function AdminPage() {
                   <option value="cafe_restaurant">Kafe & restoran</option>
                   <option value="pharmacy">Apotek</option>
                   <option value="building_materials">Toko bangunan</option>
+                  <option value="furniture">Toko mebel</option>
+                  <option value="workshop_spareparts">Bengkel & sparepart</option>
                 </Select>
                 <Input
                   label="Nama toko"

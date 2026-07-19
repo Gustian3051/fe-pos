@@ -10,7 +10,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:ui:smoke": "node ./scripts/qa-ui-smoke.mjs",
+    "test:production": "npm run test:ui:smoke && npm run lint && npm run build"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.2",
